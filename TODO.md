@@ -35,6 +35,61 @@
       adapts the QG model; the Bonaventure chapter evaluates the system. Never
       evaluate on anything the model was trained on.
 
+### Modular implementation protocol
+
+Each future implementation prompt should target one task below. A task may be
+marked complete only after its module tests pass and its public contract remains
+compatible with the preceding tasks. Do not implement a downstream task by
+duplicating logic in an upstream module or in `app.py`.
+
+| ID | Implementable task | Owns | Depends on | Safe handoff contract |
+|---|---|---|---|---|
+| M00 | Repository scaffolding | `src/__init__.py`, config, dependencies, test layout | None | Imports work; tests can run |
+| M01 | Pipeline result contract | schema tests and typed/documented result shape | M00 | `generate_mcqs(...)` returns all required top-level keys |
+| M02 | Raw-text input adapter | `src/input_handler.py` | M01 | Text input becomes a validated source artifact |
+| M03 | PDF extraction adapter | `src/pdf_processor.py` | M01 | PDF input becomes ordered page text plus metadata |
+| M04 | Preprocessing | `src/preprocessing.py` | M02 or M03 | Raw text remains preserved; cleaned text is separate |
+| M05 | Segmentation and chunking | `src/segmentation.py`, `src/chunking.py` | M04 | Sentences/chunks have stable IDs and source mapping |
+| M06 | Candidate extraction | `src/keyword_extractor.py` | M05 | Returns the fixed candidate dictionary shape |
+| M07 | Candidate ranking | `src/ranking.py` | M06 | Returns ranked candidates without changing candidate schema |
+| M08 | Representations and similarity | `src/embeddings.py` | M05, M07 | TF-IDF and semantic utilities are independently testable |
+| M09 | Question generation | `src/question_generator.py` | M05, M07, M08 | Returns traceable generation records; backend is explicit |
+| M10 | Question validation | `src/validator.py` | M09, M08 | Returns validity plus detailed reasons |
+| M11 | Distractor generation | `src/distractor_generator.py` | M07, M08, M10 | Returns candidates, scores, selected options, and rejection reasons |
+| M12 | MCQ assembly and validation | `src/mcq_validator.py` | M10, M11 | Rejects critical failures and returns validated MCQs only |
+| M13 | Pipeline orchestration | `src/pipeline.py` | M02–M12 | Connects modules without owning their internal algorithms |
+| M14 | Evaluation | `evaluation/` | M13 | Reports measured results without changing generation behavior |
+| M15 | Streamlit integration | `app.py`, UI helpers | M01, M13 | UI consumes the result contract; no NLP logic in the UI |
+| M16 | Quiz mode hardening | UI quiz state/tests | M15, M13 | Quiz operates only on validated MCQs |
+| M17 | Documentation and release | README, report, reproducibility records | M13–M16 | Setup, tests, limitations, and known gaps are current |
+
+#### Safe task rules
+
+- One prompt should normally implement one `M##` task; explicitly name the ID
+  in the prompt and update only its checklist items.
+- Before starting a task, inspect its dependency rows and the current public
+  contract. If a dependency is incomplete, add a small adapter or test seam;
+  do not silently implement the dependency as part of the new task.
+- Every task must include focused unit tests and preserve the existing tests.
+- Changes to shared schemas require updating the contract, all consumers, and
+  schema tests in the same task.
+- Keep unfinished optional work visibly unchecked. Do not mark a task complete
+  because a stub or UI placeholder exists.
+- The current completed scope is M15's UI shell and M16's quiz interaction;
+  their NLP-pipeline integration remains unchecked until M13 is implemented.
+
+#### Prompt handoff template
+
+Use this structure for future implementation requests:
+
+```text
+Implement task M##: <task name>.
+Read the task row, its dependencies, and its safe handoff contract first.
+Do not implement downstream tasks.
+Add/update focused tests, preserve existing contracts, and update TODO.md only
+for work actually completed.
+```
+
 ---
 
 ## 1. Repository Scaffolding  *(Phase 0)*
