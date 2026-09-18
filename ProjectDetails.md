@@ -168,6 +168,104 @@ The overall system will follow this pipeline:
                  │ Input → Process → MCQ │
                  └──────────────────────┘
 ```
+## 5.1 Detailed Implementation Pipeline (Canonical)
+
+The diagram above is a **simplified high-level overview**. The diagram below is
+the **canonical pipeline that the code in `src/` must implement**, and it is the
+reference for module boundaries, ordering, and responsibility.
+
+``` text
+                 PDF / TEXT
+                     │
+                     ▼
+              PDF Extraction
+                     │
+                     ▼
+             Preprocessing
+                     │
+                     ▼
+          Sentence Segmentation
+                     │
+                     ▼
+                Chunking
+                     │
+                     ▼
+       ┌─────────────────────────┐
+       │ Candidate Extraction    │
+       │ RAKE + spaCy            │
+       └────────────┬────────────┘
+                    ▼
+          Candidate Ranking
+          TF-IDF + features
+                    │
+                    ▼
+            Answer Candidate
+                    │
+                    ▼
+        ┌───────────────────────┐
+        │ Question Generation   │
+        │ FLAN-T5               │
+        └───────────┬───────────┘
+                    ▼
+           Question Validation
+                    │
+                    ▼
+        ┌───────────────────────┐
+        │ Distractor Candidates │
+        │ textbook concepts     │
+        └───────────┬───────────┘
+                    ▼
+          Semantic Embeddings
+          (Sentence Transformer)
+                    │
+                    ▼
+          Type / Domain Filter
+                    │
+                    ▼
+       Contextual Incorrectness
+                    │
+                    ▼
+            Top 3 Distractors
+                    │
+                    ▼
+             Final Validation
+                    │
+                    ▼
+        Semantic Duplicate Check
+                    │
+                    ▼
+              FINAL MCQ
+                    │
+                    ▼
+             Streamlit / Quiz
+```
+
+## 5.2 Embedding Roles (Resolved: Which Embedding Is Used Where?)
+
+Earlier drafts of this plan left the question *"which embedding are we actually
+using?"* ambiguous. That ambiguity is now resolved: **each pipeline stage has
+exactly one primary representation**, and each representation has one clearly
+stated role.
+
+  Purpose                        Recommended method                Required?
+  ------------------------------ --------------------------------- -----------
+  Candidate importance           TF-IDF                            Yes (core)
+  Candidate ranking              TF-IDF + linguistic features      Yes (core)
+  Semantic similarity            Sentence Transformer              Yes (core)
+  Distractor similarity          Sentence Transformer              Yes (core)
+  Duplicate-question detection   Sentence Transformer              Yes (core)
+  Word-level experiment          Word2Vec                          No (optional)
+
+Consequences for the implementation:
+
+-   **TF-IDF is the core representation for candidate extraction and ranking.**
+    It is cheap, deterministic, and fully explainable in a viva.
+-   **Sentence Transformer embeddings are the core representation for all
+    semantic work:** question-to-source relevance, distractor ranking, and
+    duplicate-question detection. A small, fast model such as
+    `all-MiniLM-L6-v2` is sufficient and runs comfortably on CPU.
+-   **Word2Vec is demoted to an optional experiment**, not a required core
+    component. It survives only as a comparison point in §14 and §39.
 
 ------------------------------------------------------------------------
 
@@ -178,11 +276,14 @@ A practical implementation can use:
   Component                  Recommended Technology
   -------------------------- -------------------------------------------
   Programming Language       Python
-  NLP                        spaCy, NLTK
-  Embeddings                 Word2Vec / pretrained embeddings
+  NLP                        spaCy
+  Candidate Representation   TF-IDF (core)
+  Semantic Embeddings        Sentence Transformer (`all-MiniLM-L6-v2`)
   Keyword Extraction         RAKE and/or spaCy
-  Question Generation        T5 / FLAN-T5
-  Distractor Generation      WordNet/Sense2Vec + semantic similarity
+  Question Generation        FLAN-T5 (`google/flan-t5-base` primary,
+                             `google/flan-t5-small` fallback)
+  Distractor Generation      Textbook concepts + Sentence Transformer
+                             similarity (WordNet optional)
   ML Classifier/Ranking      Scikit-learn
   PDF Extraction             PyMuPDF
   Similarity                 Cosine similarity
@@ -204,19 +305,49 @@ Do not build the complete system at once.
 Build it incrementally:
 
 ``` text
+Phase 0 → Repository scaffolding
 Phase 1 → Basic text input
 Phase 2 → PDF extraction
-Phase 3 → Preprocessing
-Phase 4 → Keyword/answer extraction
-Phase 5 → Question generation
-Phase 6 → Distractor generation
-Phase 7 → Validation
+Phase 3 → Preprocessing, segmentation, and chunking
+Phase 4 → Candidate extraction, ranking, and embeddings
+Phase 5 → Question generation and validation
+Phase 6 → Distractor generation and validation
+Phase 7 → MCQ validation and duplicate filtering
 Phase 8 → Evaluation
-Phase 9 → Interactive web interface
-Phase 10 → Integration and final testing
+Phase 9 → Interactive web interface and quiz mode
+Phase 10 → Integration, testing, and documentation
 ```
 
 At every phase, keep a working version.
+
+## 7.1 Canonical Phase Map (Single Source of Truth for Numbering)
+
+Earlier drafts of this plan numbered phases inconsistently (for example,
+"pipeline integration" appeared as Phase 7 in one section and Phase 10 in
+another). The table below is the **single source of truth for phase numbering**.
+`TODO.md` must use these exact phase numbers, and no section may invent its own.
+
+  Phase   Name                                    Deliverable
+  ------- --------------------------------------- --------------------------------
+  Phase 0 Repository scaffolding                  Runnable skeleton + config
+  Phase 1 Basic text input                        `generate_mcqs()` accepts raw text
+  Phase 2 PDF extraction                          PDF → structured page text
+  Phase 3 Preprocessing + segmentation + chunking  Clean text → overlapping chunks
+  Phase 4 Candidate extraction, ranking,          Ranked, diverse answer candidates
+          embeddings                              (+ representations)
+  Phase 5 Question generation + question          Context + answer → valid question
+          validation
+  Phase 6 Distractor generation + distractor      Question + answer → 3 distractors
+          validation
+  Phase 7 MCQ validation + duplicate filtering    Validated, de-duplicated MCQs
+  Phase 8 Evaluation                              Automatic + human evaluation
+  Phase 9 Interactive web interface + quiz mode   Working Streamlit application
+  Phase 10 Integration, testing, documentation    End-to-end tested + documented
+                                                  project
+
+**Optional / cross-cutting (not a phase):** fine-tuning (§17), experimental
+comparisons (§39), export extras (§34). These are *add-ons* that are scheduled
+only after the corresponding phase is working.
 
 ------------------------------------------------------------------------
 
@@ -420,6 +551,27 @@ Then remove:
 Keep the candidate extraction module independent so it can be replaced
 later.
 
+### Module Output Contract
+
+To keep the module replaceable, `src/keyword_extractor.py` must return a **list
+of dictionaries** with a fixed shape:
+
+``` python
+{
+    "text": "Transmission Control Protocol",   # the candidate phrase
+    "source": "rake" | "spacy_noun_chunk" | "spacy_ner",
+    "rake_score": 8.4,                         # 0.0 if not from RAKE
+    "chunk_id": 3,
+    "is_noun_phrase": True,
+    "is_named_entity": False,
+    "entity_label": None                       # e.g. "ORG" when NER
+}
+```
+
+Every downstream module (§13 ranking, §21 distractors) consumes **this exact
+shape** and nothing else. Candidate extraction must never return bare strings, and
+ranking must never reach back into spaCy objects.
+
 ------------------------------------------------------------------------
 
 # 13. Candidate Answer Selection
@@ -448,39 +600,132 @@ Reliable delivery         0.76
 Protocol                  0.43
 ```
 
-Select the top candidates while maintaining diversity.
+## Ranking Features (Concrete)
 
-Avoid selecting several candidates from exactly the same concept.
+Each candidate is scored with a **weighted sum of normalized features**. All
+features are min–max normalized to `[0, 1]` across the candidate pool before
+combination, so weights are directly interpretable:
+
+  Feature           Symbol           Default weight   Notes
+  ----------------- ---------------- ---------------- --------------------------
+  TF-IDF score      `tfidf_score`    0.35             core representation (§14.1)
+  RAKE score        `rake_score`     0.20             0.0 if from spaCy only
+  Frequency         `frequency`      0.15             occurrences in the chapter
+  Noun-phrase       `is_noun_phrase` 0.10             1.0 or 0.0
+  Named entity      `is_named_entity`0.10             1.0 or 0.0
+  Position          `position`       0.10             earlier in chunk ranks higher
+
+`final_score = Σ (weight × normalized_feature)`
+
+Default weights live in `CONFIG["ranking_weights"]` so the ranking method can be
+experimented with (§39 Experiment 1) without editing code.
+
+## Hard Filters (Applied Before Ranking)
+
+A candidate is discarded outright if it:
+
+-   is shorter than `CONFIG["min_candidate_chars"]` (default 3),
+-   is longer than `CONFIG["max_candidate_words"]` (default 6),
+-   is composed entirely of stopwords,
+-   is composed entirely of digits/punctuation,
+-   duplicates another candidate after lowercasing, lemmatizing, and stripping
+    punctuation.
+
+## Diversity Rule (Concrete)
+
+Selecting the top-N by score alone produces near-duplicate answers. The selection
+step therefore enforces:
+
+1.  Sort candidates by `final_score` descending.
+2.  Accept a candidate only if its **normalized token overlap** with every
+    already-accepted candidate is below `CONFIG["max_candidate_overlap"]`
+    (default 0.6).
+3.  Stop when `num_questions` distinct candidates are accepted, or when the
+    candidate pool is exhausted (then generate fewer MCQs rather than padding).
+
+Example of what requirement 2 prevents: `Transmission Control Protocol` and
+`TCP` must not both become answers.
 
 ------------------------------------------------------------------------
 
 # 14. Embedding Strategy
 
 Because the project needs to explain how text representation works, the
-implementation should explicitly document the embedding process.
+implementation must **explicitly document which representation is used, where,
+and why**.
 
-Two approaches can be explored.
+This is now **decided, not exploratory.** Per §5.2, the project uses two core
+representations plus one optional experiment:
 
-## 14.1 Pretrained Embedding
+1.  **TF-IDF** — candidate importance and candidate ranking (core, Phase 4)
+2.  **Sentence Transformer embeddings** — all semantic similarity (core,
+    Phases 5–7)
+3.  **Word2Vec** — optional word-level comparison experiment only
+
+## 14.1 TF-IDF (Core — Candidate Importance and Ranking)
+
+TF-IDF weights each term/phrase by term frequency and inverse document frequency.
+
+Usage in this project:
+
+-   Chunks act as the "documents"; candidate n-grams act as the "terms".
+-   A candidate frequent in one chunk but rare across the chapter scores higher,
+    i.e. it is locally important and discriminative.
+-   This score becomes the **`tfidf_score` feature** in candidate ranking (§13).
+
+Why TF-IDF is the core choice:
+
+-   No training needed, and fully deterministic — important for reproducibility.
+-   Works on a single chapter; no large corpus required.
+-   Directly explainable in a viva: the score can be inspected term by term.
+
+## 14.2 Sentence Transformer Embeddings (Core — Semantic Similarity)
+
+A Sentence Transformer encodes a **whole sentence or phrase** into one dense
+vector, so semantic similarity between a question and a passage can be compared
+directly with cosine similarity.
+
+Recommended model: `sentence-transformers/all-MiniLM-L6-v2` (small, fast,
+CPU-friendly, 384-dimensional).
+
+Used for:
+
+-   **Question ↔ source-context relevance** (question validation, §19 Check 5).
+-   **Distractor candidate ranking** by relatedness to the answer and question
+    (§21).
+-   **Duplicate-question detection** by comparing each new question against
+    previously accepted ones (§46).
+
+``` text
+Question / Passage text
+        ↓
+Sentence Transformer encoder
+        ↓
+Fixed-length dense vector (e.g. 384-dim)
+        ↓
+Cosine similarity
+```
+
+## 14.3 Word2Vec (Optional Experiment Only)
+
+Word2Vec is **not required by the core system.** It is retained only as an
+optional word-level representation experiment and may be dropped entirely without
+affecting any core functionality.
+
+If attempted, the two variants are:
+
+### Pretrained Word2Vec
 
 Use a pretrained Word2Vec or similar embedding.
 
-Advantages:
+Advantages: better with a small corpus, faster, no training required.
 
--   Better with a small corpus
--   Faster
--   No need to train embeddings from scratch
+Disadvantages: the vectors were learned outside the project corpus, so the
+embedding process is less concrete.
 
-Disadvantages:
-
--   The embedding process is less concrete
--   The vectors were learned outside the project corpus
-
-## 14.2 Custom Word2Vec
+### Custom Word2Vec
 
 Train Word2Vec on the collected textbook corpus.
-
-Basic idea:
 
 ``` text
 Textbook Corpus
@@ -498,23 +743,20 @@ Example:
 "protocol" → [0.12, -0.31, 0.45, ...]
 ```
 
-If the available corpus is sufficiently large, a custom embedding
-experiment can be included.
+Word-level vectors must be **averaged** to compare phrases, and they capture
+phrase similarity worse than sentence embeddings — which is precisely why
+Word2Vec is optional here, not core.
 
-## Recommended Comparison
+## 14.4 Representation Summary
 
-If resources permit:
-
-``` text
-TF-IDF
-   vs
-Pretrained Word2Vec
-   vs
-Custom Word2Vec
-```
-
-The comparison does not need to be forced if the project timeline or
-corpus size makes it impractical.
+  Stage                              Representation              Core?
+  ---------------------------------- --------------------------- -------
+  Candidate importance               TF-IDF                      Yes
+  Candidate ranking features         TF-IDF + linguistic feats   Yes
+  Question ↔ context relevance       Sentence Transformer        Yes
+  Distractor ↔ answer relatedness    Sentence Transformer        Yes
+  Duplicate question detection       Sentence Transformer        Yes
+  Word-level similarity experiment   Word2Vec                    No
 
 ------------------------------------------------------------------------
 
@@ -552,12 +794,28 @@ Which protocol provides reliable and ordered delivery?
 
 # 16. Question Generation Model
 
-A sequence-to-sequence Transformer such as:
+The question-generation component is a **sequence-to-sequence Transformer**. The
+model choice is now **fixed** rather than left open, because leaving several
+options open makes both the implementation and the experiments ambiguous.
 
--   T5
--   FLAN-T5
+## 16.0 Fixed Model Choice
 
-can be used.
+  Role        Model                 Notes
+  ----------- --------------------- ------------------------------------------
+  Primary     `google/flan-t5-base` Used when hardware permits; better quality
+                                    of the two.
+  Fallback    `google/flan-t5-small`Used when `flan-t5-base` does not fit in
+                                    available RAM/VRAM or is too slow.
+
+Rules:
+
+-   **Exactly these two checkpoints.** Do not add other checkpoints mid-project
+    without recording the change.
+-   The model is set by `CONFIG["question_model"]`, which must be one of
+    `"google/flan-t5-base"` or `"google/flan-t5-small"`.
+-   The model choice and the execution backend (§16.1) are **independent
+    settings.** Choosing the HF API backend does not change which model is
+    requested; it only changes *where* it runs.
 
 A question-generation prompt may follow:
 
@@ -591,9 +849,10 @@ configuration. Swapping backends must **not** require changing any calling code.
 
 ### Backend A --- Local Model (default for small models / final demo)
 
--   Load a small checkpoint such as `t5-small` or `flan-t5-small`/`flan-t5-base`.
+-   Load the checkpoint fixed in §16.0 — `google/flan-t5-base` (primary) or
+    `google/flan-t5-small` (fallback).
 -   Load the model **once** and cache it; never reload per request.
--   Use GPU if available, otherwise fall back gracefully.
+-   Use GPU if available, otherwise fall back to CPU gracefully.
 -   Suitable when a lightweight model runs acceptably on the local machine.
 
 ### Backend B --- Hugging Face Inference API (fallback for hardware bottlenecks)
@@ -601,8 +860,8 @@ configuration. Swapping backends must **not** require changing any calling code.
 If local execution is too slow or runs out of memory, call the **Hugging Face
 Inference API** instead of running the model locally.
 
--   Access hosted T5 / FLAN-T5 (or a compatible question-generation model)
-    over HTTPS; no local GPU or large download required.
+-   Access the **same model chosen in §16.0** (`google/flan-t5-base` or
+    `google/flan-t5-small`) over HTTPS; no local GPU or large download required.
 -   Requires a Hugging Face access token, supplied via an environment variable
     (e.g. `HUGGINGFACE_API_TOKEN`). The token must **never** be hard-coded or
     committed to Git.
@@ -611,22 +870,31 @@ Inference API** instead of running the model locally.
 -   Apply retries with backoff and a clear timeout; surface a readable error if
     the API is unreachable, rate-limited, or the token is missing/invalid.
 
-### Backend Selection Rules
+### Backend Selection Rules (Explicit, Never Automatic)
+
+Automatic runtime fallback conflicts with reproducibility: two runs of the same
+experiment could silently use different backends (and therefore different model
+execution paths) without that difference ever being recorded. The backend is
+therefore **chosen explicitly before a run and never switched mid-run.**
 
 ``` text
-Try local model (Backend A)
-        ↓
-If out-of-memory / unacceptable latency / no suitable hardware
-        ↓
-Fall back to Hugging Face Inference API (Backend B)
+CONFIG["question_model_backend"]
+    ├── "local"    → Backend A (local model)
+    └── "hf_api"   → Backend B (Hugging Face Inference API)
 ```
 
--   Make the backend explicitly selectable in `CONFIG` (e.g.
-    `"question_model_backend": "local"` or `"hf_api"`) so experiments are
-    reproducible.
--   Record **which backend** was used for every run in the results and report.
+-   The backend is set explicitly by `CONFIG["question_model_backend"]`; there is
+    **no implicit switching** during generation.
+-   If the selected backend fails (OOM, timeout, missing/invalid token), the run
+    **stops with a clear error** instructing the user to change the setting. It
+    does **not** silently continue on the other backend.
+-   Record **which backend** was used for every run in the results and the report.
 -   Keep both backends interchangeable so the rest of the pipeline (validation,
     distractors, scoring) is unaffected by the choice.
+-   Manual convenience is still allowed: the Streamlit UI may offer a
+    "switch backend and retry" control. That is a deliberate user action, not an
+    automatic fallback.
+-   A run must record **both** `question_model` and `question_model_backend`.
 
 ### Practical Notes
 
@@ -649,8 +917,56 @@ A pretrained question-generation model can first be tested directly.
 Then, if computational resources permit, fine-tune it on a
 question-generation dataset.
 
-A suitable starting dataset is SQuAD/SQuAD 2.0 because it contains
-context, question, and answer relationships.
+A suitable starting dataset is **SQuAD / SQuAD 2.0**.
+
+### Important wording for the report
+
+SQuAD is a **reading-comprehension dataset, not a dedicated question-generation
+or MCQ dataset.** It was created for *answer extraction* (span selection), not for
+generating questions. It contains:
+
+``` text
+Context
+Question
+Answer   (a span inside the context)
+```
+
+It is nevertheless **useful here for answer-aware question generation**, because
+the `(context, answer) → question` relationship it contains is exactly the input
+format this project uses (§15). What SQuAD does *not* provide is:
+
+-   distractor options (SQuAD has no MCQ options),
+-   deliberately designed wrong answers,
+-   multiple plausible options per question.
+
+So the report must state clearly that:
+
+> SQuAD/SQuAD 2.0 is used as a source of **answer-aware question-generation**
+> training signal (`context + answer → question`). It is **not** an MCQ dataset
+> and provides **no distractor supervision**; distractor quality is therefore
+> evaluated separately (§42) using the textbook corpus.
+
+For SQuAD 2.0 specifically, note that it adds **unanswerable** questions
+(§75 refs 4–5). These must be filtered out before training, because this project
+always supplies a valid answer candidate.
+
+### Corpus separation (critical)
+
+The fine-tuning data and the evaluation data must never overlap:
+
+``` text
+SQuAD / SQuAD 2.0
+   ↓
+Question-generation model adaptation / training
+
+Bonaventure, Chapter 3 (Transport Layer)   ← §35.2.1
+   ↓
+This system's evaluation / demonstration
+```
+
+If the model is fine-tuned on SQuAD, the evaluation chapter must remain
+completely separate from it. Do not mix the two, and never evaluate on training
+examples (§37).
 
 The experiment can compare:
 
@@ -765,48 +1081,85 @@ should be plausible.
 
 # 21. Distractor Generation Strategy
 
-Use a hybrid approach.
+Earlier drafts described this method as
+"WordNet/Sense2Vec + semantic similarity + corpus candidates", which is too broad
+to implement reproducibly. **The final method is now fixed** to the pipeline
+below, and this pipeline is the only one required for the core system.
 
 ``` text
-Correct Answer
-      ↓
-Find semantically related candidates
-      ↓
-Remove the correct answer
-      ↓
-Remove duplicates
-      ↓
-Check contextual incompatibility
-      ↓
-Rank candidates
-      ↓
-Select top 3 distractors
+Textbook / corpus candidate concepts   (pool from §12–§13)
+              ↓
+Candidate set = all ranked concepts except the correct answer
+              ↓
+Semantic embedding similarity          (Sentence Transformer, §14.2)
+   score = 0.5·cos(cand, answer) + 0.5·cos(cand, question)
+              ↓
+Type / domain filter                   (prefer same entity label / phrase type)
+              ↓
+Contextual incorrectness check         (reject anything the context supports)
+              ↓
+Rank remaining candidates by combined similarity score
+              ↓
+Select top 3
 ```
 
-Possible sources:
+## 21.1 Stage Definitions (Concrete)
+
+1.  **Candidate source — textbook/corpus concepts (required).** The candidate pool
+    is the ranked concept list from §12–§13, together with all accepted answer
+    candidates from the whole chapter. This keeps distractors grounded in the
+    supplied textbook.
+2.  **Remove the correct answer.** Case-insensitive, punctuation-insensitive
+    comparison against the answer.
+3.  **Semantic embedding similarity (required).** Using the Sentence Transformer
+    from §14.2, compute
+    `score = 0.5 · cos(cand, answer) + 0.5 · cos(cand, question)`.
+    Distractors must be *near* the answer in meaning — that is what makes them
+    plausible.
+4.  **Type / domain filter.** If the answer is a named entity with label `L`,
+    prefer candidates whose label is also `L`. If the answer is a noun phrase,
+    prefer noun phrases. This satisfies §23 Check 5.
+5.  **Contextual incorrectness check.** Reject a candidate if the source context
+    actually supports it as the answer to this question (checked with the same
+    embedding model against the question). This satisfies §23 Check 4.
+6.  **Rank and select top 3.** Take the three highest-scoring survivors. If fewer
+    than three survive, mark the MCQ invalid (§52) rather than padding with
+    unrelated words.
+
+## 21.2 Optional Sources (Experiments / Fallbacks Only)
+
+These sources are **not core**. Use them only if the textbook-derived pool is too
+small, or as an ablation experiment (§39 Experiment 4).
 
 ### WordNet
 
-Useful for English lexical relationships.
+English lexical relationships (synonyms, hypernyms, hyponyms). Useful as a
+fallback when the chapter yields too few in-domain concepts. Risky on its own
+because WordNet relations are *lexical*, so it can produce distractors that are
+semantically *equivalent* to the answer. Any WordNet distractor must still pass
+the contextual incorrectness check (stage 5).
 
 ### Sense2Vec
 
-Can retrieve contextually related terms.
+Retrieves contextually related terms. Optional; it adds a heavy dependency and is
+therefore not part of the core pipeline.
 
-### Word embeddings
+### Word-embedding similarity (Word2Vec)
 
-Use cosine similarity to identify semantically similar candidates.
+Only as part of the optional Word2Vec experiment (§14.3, §39 Experiment 4).
 
-### Corpus candidates
+### Corpus candidates (primary)
 
-Use concepts extracted from the same textbook.
-
-The last approach is particularly useful because distractors can come
-from concepts that actually appear in the textbook.
+Concepts extracted from the same textbook — this is the **primary** source per
+stage 1, because distractors then belong to the same conceptual domain.
 
 ------------------------------------------------------------------------
 
 # 22. Recommended Distractor Strategy
+
+> **The final method is fixed in §21.1.** This section only illustrates *why*
+> textbook-grounded distractors are preferred. If §21.1 and this section ever
+> appear to disagree, **§21.1 is authoritative.**
 
 Prefer textbook-grounded distractors.
 
@@ -851,7 +1204,9 @@ even if they are technically incorrect.
 
 # 23. Distractor Validation
 
-Each distractor should pass several checks.
+Each distractor should pass several checks. Checks 1, 2, 4, and 5 map directly
+onto stages of the fixed pipeline (§21.1); Check 3 is produced by the scoring
+formula in §21.1 stage 3.
 
 ## Check 1 --- Not equal to answer
 
@@ -859,18 +1214,26 @@ Each distractor should pass several checks.
 distractor.lower() != answer.lower()
 ```
 
+(Case- and punctuation-insensitive; this is stage 2 of §21.1.)
+
 ## Check 2 --- No duplicate distractors
 
 All four options should be unique.
 
 ## Check 3 --- Semantic plausibility
 
-The distractor should be related to the answer/question.
+The distractor should be related to the answer/question. This is measured
+numerically by the §21.1 stage-3 score and reported as a raw number (§42.1), not
+as a 1--5 rating.
 
-## Check 4 --- Contextual incorrectness
+## Check 4 --- Contextual incorrectness (CRITICAL)
 
-The distractor should not actually be the correct answer to the
-question.
+The distractor should not actually be the correct answer to the question, judged
+**against the source context** — not by intuition.
+
+> A distractor that the source context actually supports as an answer is a
+> **critical failure** (§42.1). It must be counted separately from ordinary
+> low-quality distractors, and any MCQ containing one must be rejected.
 
 ## Check 5 --- Appropriate type
 
@@ -880,6 +1243,8 @@ protocols.
 If the answer is a person, distractors should preferably be people.
 
 If the answer is a location, distractors should preferably be locations.
+
+This is enforced by the type/domain filter (stage 4 of §21.1).
 
 ------------------------------------------------------------------------
 
@@ -1001,11 +1366,14 @@ Input Method:
 Number of Questions:
 [ 5 ]
 
-Question Generation Model:
-[ T5 ]
+Semantic Embedding:
+[ Sentence Transformer (all-MiniLM-L6-v2) ]
 
-Embedding:
-[ Word2Vec ]
+Question Model:
+[ FLAN-T5 (google/flan-t5-base) ]
+
+Execution Backend:
+( ) Local   ( ) Hugging Face Inference API
 
 [ Generate MCQs ]
 
@@ -1273,6 +1641,13 @@ Answer
 
 This can be used for question-generation experimentation or fine-tuning.
 
+> **Wording caveat (see §17):** SQuAD is a **reading-comprehension** dataset, not a
+> dedicated question-generation or MCQ dataset. It is used here only as a source
+> of **answer-aware** question-generation signal (`context + answer → question`).
+> It provides **no distractor supervision**, so distractor quality is evaluated
+> separately (§42). For SQuAD 2.0, filter out the unanswerable questions before
+> training. This dataset must never overlap with the evaluation chapter (§35.2.1).
+
 ## 35.2 Evaluation Textbook Corpus
 
 The final system should be tested on textbook material that is separate
@@ -1398,78 +1773,166 @@ Do not evaluate a fine-tuned model on examples used during training.
 
 # 38. Baseline System
 
-Before implementing the full Transformer system, create a baseline.
+Before implementing the full Transformer system, create a baseline. The baseline
+must be **fully specified** here, because a vaguely described baseline cannot be
+reproduced or fairly compared against the Transformer system.
 
-Possible baseline:
+## 38.1 Fixed Baseline Specification
 
-``` text
-Keyword extraction
-      ↓
-Template question generation
-      ↓
-Embedding-based distractors
-```
-
-Example template:
+The baseline is deliberately non-neural so that it is deterministic and cheap:
 
 ``` text
-"What is {answer}?"
-"Which of the following refers to {definition}?"
+Ranked answer candidates (§13, top-N by TF-IDF + features)
+      ↓
+Template question generation (deterministic rules, below)
+      ↓
+Distractors = next-highest ranked candidates from the same chunk
+      ↓
+Same validation as the main system (§19, §23, §24)
 ```
 
-The baseline provides something to compare against.
+**Step 1 — Answer selection.** Use the ranked candidate list from §13 with the
+same diversity rule (§13: `max_candidate_overlap = 0.6`). No new logic.
+
+**Step 2 — Question templates (exact rules).** Pick the template by the
+candidate's surface form, in this fixed priority order:
+
+``` text
+1. Acronym / all-caps token (TCP, UDP, IP, HTTP)
+     "Which of the following is {answer}?"
+2. Candidate is a noun phrase and appears as the subject of a definitional
+   sentence in the chunk ("X is ..." / "X refers to ..." / "X is called ...")
+     "What is {answer}?"
+3. Candidate is the object of a definitional sentence
+   ("... is called {answer}" / "... is known as {answer}")
+     "Which of the following is known as {answer}?"
+4. Fallback (no definitional pattern matched)
+     "Which of the following is related to {answer}?"
+```
+
+Templates are applied by **string rules only** — no model is involved. The
+matched template name and rule number must be stored with the question
+(`"baseline_template": "rule_2"`) so the comparison is auditable.
+
+**Step 3 — Distractors.** Take the next three highest-ranked candidates from
+§13 that (a) are not the answer, (b) are not duplicates of each other, and
+(c) occur in the same chunk or document. If fewer than three qualify, mark that
+baseline MCQ invalid (§52) — never pad.
+
+**Step 4 — Validation.** Run the baseline through the *same* validators used by
+the Transformer system (§19, §23, §24), so the comparison isolates the
+generation method, not the validation.
+
+## 38.2 What the Baseline Is For
+
+The baseline exists only to answer one question in the report:
+
+> Does the FLAN-T5 generator produce better questions than a deterministic
+> template method, measured with the same evaluation protocol (§40–§43)?
+
+Both systems are evaluated on the **same** fixed chapter (§35.2.1) with the same
+`num_questions` and the same validation settings.
 
 ------------------------------------------------------------------------
 
 # 39. Experimental Comparisons
 
-A strong report can compare several components.
+A strong report can compare several components. **Only comparisons that can be
+completed and evaluated honestly should be attempted** — a smaller set of
+well-executed comparisons is worth more than a large set of half-finished ones.
 
-## Experiment 1 --- Keyword Extraction
-
-``` text
-RAKE
-vs
-spaCy noun phrases
-```
-
-## Experiment 2 --- Text Representation
+## Experiment 1 --- Candidate Extraction (cheap, required)
 
 ``` text
-TF-IDF
+RAKE only
 vs
-Pretrained Word2Vec
+spaCy noun phrases only
 vs
-Custom Word2Vec
+RAKE + spaCy combined (the proposed system)
 ```
 
-## Experiment 3 --- Question Generation
+Measure: number of candidates, overlap with a hand-labelled gold set drawn from
+the fixed chapter (§35.2.1).
+
+## Experiment 2 --- Candidate Ranking / Representation (cheap, required)
 
 ``` text
-Base T5
+TF-IDF only
 vs
-Fine-tuned T5
+TF-IDF + linguistic features (§13)
 ```
 
-## Experiment 4 --- Distractor Generation
+Measure: whether the top-ranked candidates match the hand-labelled important
+concepts.
+
+## Experiment 3 --- Question Generation (required, this is the core comparison)
 
 ``` text
-WordNet
+Deterministic template baseline (§38)
 vs
-Embedding similarity
-vs
-Hybrid method
+FLAN-T5 (fixed model per §16.0)
 ```
 
-Do not implement every experiment if the computational cost becomes
-excessive. Select comparisons that can be completed and evaluated
-properly.
+Measure: BLEU/ROUGE *and* human scores (§40–§41). The baseline is the reference
+point; the Transformer must beat it on the human criteria to justify its cost.
+
+## Experiment 4 --- Distractor Generation (recommended)
+
+``` text
+Embedding similarity only
+vs
+Full fixed pipeline (corpus candidates → embedding similarity → type filter
+→ contextual incorrectness, §21.1)
+```
+
+Measure: plausibility, incorrectness, diversity (§42).
+
+## Experiment 5 --- Word2Vec (optional, exploratory only)
+
+Word2Vec is **not** a core component (§14). It may be trained on the corpus as a
+word-level side experiment and reported as such, but it must not be required for
+the main pipeline to run.
+
+## Fine-Tuning Comparison (optional, expensive)
+
+``` text
+Base FLAN-T5
+vs
+FLAN-T5 fine-tuned on SQuAD-style answer-aware QG data
+```
+
+Only if compute permits (§17). Never evaluate on training data (§37).
 
 ------------------------------------------------------------------------
 
 # 40. Evaluation of Question Generation
 
-Automatic metrics can include:
+## 40.1 Primary Evaluation: Source-Grounded Correctness + Human Judgement
+
+Because this project generates **textbook-grounded** MCQs, the central evaluation
+is whether the generated question is **supported by the source context** and
+**useful to a learner**. BLEU and ROUGE are secondary, supporting evidence only.
+
+The primary protocol, applied to every generated MCQ:
+
+``` text
+1. Source support        Is the question answerable from the supplied context?
+2. Answer correctness    Is the stored answer actually correct per the context?
+3. Question relevance    Is the question about a meaningful concept in the chapter?
+4. Well-formedness       Is the question grammatical and unambiguous?
+5. Single correct option  Exactly one of the four options is correct?
+6. Distractor quality    Plausible, incorrect, and mutually distinct? (§42)
+```
+
+Items 1, 2, and 5 are checked **automatically** where possible (string/embedding
+matching against the context) and then **confirmed by human reviewers**. Items
+3, 4, and 6 are human-only. A question is reported as *valid* only if all
+automatic checks pass; human scores are reported separately and never mixed into
+the automatic validity rate.
+
+## 40.2 Secondary Evaluation: BLEU / ROUGE
+
+Automatic reference-based metrics can also be reported:
 
 ### BLEU
 
@@ -1479,19 +1942,26 @@ Measures n-gram overlap between generated and reference questions.
 
 Measures overlap with reference text.
 
-These metrics can be reported, but they should not be treated as the
-only measure of question quality.
+**Important caveats** — these must appear wherever BLEU/ROUGE are reported:
 
-A generated question may be valid even if its wording differs
-substantially from the reference question.
+- Reference questions are required. For the fixed evaluation chapter (§35.2.1)
+  there are **no reference questions**, so BLEU/ROUGE can only be computed on a
+  dataset that has them (e.g. a held-out SQuAD slice, §17).
+- A generated question may be perfectly valid while scoring near-zero BLEU,
+  because there are many correct ways to phrase the same question.
+- BLEU/ROUGE must therefore **never** be presented as the headline result or as
+  a measure of question quality. They are diagnostics for wording similarity.
 
 ------------------------------------------------------------------------
 
 # 41. Human Evaluation
 
-Human evaluation is strongly recommended.
+Human evaluation is the **primary** quality measure for this project (§40.1),
+not an optional extra.
 
 Ask several evaluators to rate generated MCQs.
+
+## 41.1 Rated Criteria
 
 Suggested criteria:
 
@@ -1500,12 +1970,28 @@ Suggested criteria:
   Question relevance           1--5
   Grammatical quality          1--5
   Correctness                  1--5
+  Source support               1--5
   Distractor plausibility      1--5
+  Distractor incorrectness     1--5
   Overall quality              1--5
 
 Calculate average scores.
 
-Example:
+## 41.2 Reviewer Protocol
+
+- **Minimum 3 reviewers**, each rating the **same fixed set** of MCQs generated
+  from the fixed chapter (§35.2.1).
+- Reviewers must be shown the **source context** alongside each MCQ, so that
+  "source support" and "correctness" can actually be judged.
+- Reviewers must **not** be told whether a question came from the baseline (§38)
+  or from FLAN-T5. The generation method is hidden to avoid bias.
+- Report **per-criterion mean and standard deviation**, plus the number of
+  reviewers, so agreement/disagreement is visible.
+- Store raw ratings in `evaluation/human_evaluation.csv`, one row per
+  (reviewer, question), before computing any averages.
+- Save the empty rating form to Git so the protocol itself is reproducible.
+
+Example (illustrative format only — replace with real measured values):
 
 ``` text
 Relevance              4.4 / 5
@@ -1543,6 +2029,23 @@ Is it sufficiently related to the question?
 Are the three distractors meaningfully different?
 
 A good distractor should not be obviously unrelated.
+
+## 42.1 How Each Criterion Is Measured
+
+| Criterion | How it is measured | Who measures |
+| --------- | ------------------ | ------------ |
+| Plausibility | Does the option look reasonable for this question? | Human (1--5) |
+| Incorrectness | Is it actually wrong **per the source context**? Verified by re-reading the context, not by intuition. | Human (1--5) + automatic context check |
+| Similarity | Cosine similarity between distractor and answer (Sentence Transformer, §14) | Automatic (reported as a number) |
+| Diversity | Pairwise similarity among the three distractors must be below a threshold | Automatic (reported as a number) |
+
+Two rules that must be respected:
+
+1. **Incorrectness must be verified against the source context.** A distractor
+   that also appears as a correct statement in the context is a **critical
+   failure** and must be counted separately from ordinary low-quality ones.
+2. **Similarity and Diversity are reported as raw numbers**, not converted into
+   1--5 scores, so they cannot be confused with human ratings.
 
 ------------------------------------------------------------------------
 
@@ -1639,8 +2142,21 @@ Semantic similarity
 If too similar → reject/regenerate
 ```
 
-Use cosine similarity with sentence embeddings or another semantic
-representation.
+## 46.1 Resolved Method
+
+- **Representation:** Sentence Transformer embeddings (§14.2) — the same model
+  used for distractor ranking. No second embedding method is introduced.
+- **Comparison:** cosine similarity between the new question and **every already
+  accepted** question.
+- **Threshold:** `CONFIG["duplicate_similarity_threshold"]` (default `0.85`, §54).
+  If any pairwise similarity `>= threshold`, the new question is rejected.
+- **On rejection:** attempt regeneration from a different answer candidate
+  (§18); if no replacement is found, drop it rather than ship a duplicate.
+- The similarity of every rejected question and the question it collided with is
+  recorded in the validation log, so diversity filtering is auditable.
+
+Candidate concepts should also be diversified *before* generation (§13), since
+preventing duplicates upstream is cheaper than filtering them downstream.
 
 ------------------------------------------------------------------------
 
@@ -1739,27 +2255,37 @@ Responsibilities:
 
 Responsibilities:
 
--   Load pretrained embeddings
--   Train custom Word2Vec
--   Generate vectors
--   Calculate similarity
+-   **TF-IDF** construction and scoring (core — candidate importance/ranking, §14.1)
+-   **Sentence Transformer** loading and encoding (core — semantic similarity, §14.2)
+-   Cosine similarity utilities
+-   Single shared interface: `embed(text) -> vector`, `similarity(a, b) -> float`,
+      so no module re-implements similarity
+-   **Word2Vec** loading/training (optional experiment only, §14.3) — must never
+      be required for the core pipeline to run
 
 ## `question_generator.py`
 
 Responsibilities:
 
--   Load Transformer
--   Build model input
--   Generate candidate questions
--   Decode output
+-   Build model input from context + answer (§16)
+-   **Load the fixed FLAN-T5 checkpoint once** and cache it (§16.0);
+      model loading separated from generation
+-   Ask for the workload without prescribing the backend
+-   **Pluggable, explicitly configured backend** (§16.1): `local` or `hf_api`.
+      The backend is fixed before the run and **never switched mid-run** (§54.1)
+-   Generate candidate questions and decode/clean the output
+-   Return structured results including `backend` and `model_name` (§49.1)
 
 ## `distractor_generator.py`
 
 Responsibilities:
 
--   Generate candidate distractors
--   Rank candidates
--   Return three distractors
+-   Implement the **fixed pipeline of §21.1, in order**: corpus candidates →
+      remove answer → Sentence Transformer similarity → type/domain filter →
+      contextual incorrectness check → top 3
+-   Return the candidate pool and rejected candidates with reasons (§30, §49.1)
+-   Never pad: if fewer than three distractors survive, report the MCQ as invalid
+-   Optional WordNet fallback only when the textbook pool is exhausted (§21.2)
 
 ## `validator.py`
 
@@ -1792,24 +2318,75 @@ result = generate_mcqs(
 )
 ```
 
-Return structured data:
+Return structured data.
+
+## 49.1 Required Top-Level Keys
+
+The Streamlit UI is required to display the **whole pipeline** (§28–§33), so the
+result object must expose every intermediate stage, not just the final MCQs:
 
 ``` python
 {
-    "source": "...",
-    "chunks": [...],
-    "candidates": [...],
-    "questions": [
+    "config": {...},            # the exact CONFIG used for this run (§54)
+    "source": "...",            # original raw input (text or extracted PDF text)
+    "pages": [...],             # per-page text when the input was a PDF (§8.2)
+    "cleaned_text": "...",      # after preprocessing (§9)
+    "sentences": [...],         # after sentence segmentation (§10)
+    "chunks": [...],            # with chunk_id / page_start / page_end (§11)
+    "candidates": [...],        # all extracted candidates with scores (§12)
+    "ranked_candidates": [...], # after ranking + diversity filtering (§13)
+    "generation_records": [     # one record per generation attempt
+        {
+            "chunk_id": 2,
+            "answer": "TCP",
+            "model_input": "generate question: context: ... answer: TCP",
+            "backend": "local",         # or "hf_api" (§16.1)
+            "model_name": "google/flan-t5-base",
+            "candidate_questions": ["...", "..."],
+            "selected_question": "..."
+        }
+    ],
+    "distractor_records": [     # candidate + rejected distractors (§30)
+        {
+            "answer": "TCP",
+            "candidate_pool": ["UDP", "IP", "ARP", "HTTP"],
+            "selected": ["UDP", "IP", "ARP"],
+            "rejected": [{"option": "HTTP", "reason": "duplicate"}]
+        }
+    ],
+    "validation": {             # aggregate + per-question (§19, §24, §43)
+        "summary": {"generated": 30, "valid": 25, "rejected": 5},
+        "per_question": [...]
+    },
+    "stats": {                  # counts and concept-coverage metrics (§43, §44)
+        "...": "..."
+    },
+    "questions": [              # the final, validated MCQs
         {
             "question": "...",
             "answer": "...",
-            "distractors": [...],
+            "distractors": ["...", "...", "..."],
             "context": "...",
-            "chunk_id": 2
+            "chunk_id": 2,
+            "source_page": 5,
+            "generator": "flan-t5"      # or "baseline" (§38)
         }
     ]
 }
 ```
+
+## 49.2 Rules for This Interface
+
+- **Every key above is produced by `src/pipeline.py`**, never assembled inside
+  `app.py`. The UI only reads and displays.
+- The same function signature is used by scripts, notebooks, and tests, so a run
+  can be reproduced without Streamlit:
+  `result = generate_mcqs(text=text, num_questions=5)`.
+- Intermediate keys must be **plain, JSON-serializable data** (lists, dicts,
+  strings, numbers) so results can be written to `outputs/` for inspection and
+  for the evaluation scripts (§43).
+- If a stage is skipped (e.g. `pages` for text input), the key is present with an
+  empty value rather than omitted, so the UI code never has to guess.
 
 The web interface should only visualize this result.
 
@@ -1976,20 +2553,73 @@ Example configuration:
 
 ``` python
 CONFIG = {
+    # --- generation volume ---
     "num_questions": 5,
+    "num_distractors": 3,
+
+    # --- chunking (§11) ---
     "chunk_size": 8,
     "chunk_overlap": 2,
-    "embedding": "word2vec",
-    "question_model": "t5",
-    "num_distractors": 3
+
+    # --- candidate extraction / ranking (§12, §13) ---
+    "keyword_method": "rake+spacy",
+    "ranking_method": "tfidf+features",
+
+    # --- semantic similarity (§14) ---
+    # Sentence Transformer is the single semantic representation used for
+    # distractor similarity and duplicate-question detection.
+    "sentence_embedding_model": "all-MiniLM-L6-v2",
+
+    # --- question generation (§16) ---
+    # Model is FIXED for the project (§16.0). Backend is EXPLICIT (§16.1).
+    "question_model_name": "google/flan-t5-base",
+    "question_model_backend": "local",          # "local" | "hf_api"
+    "question_model_max_new_tokens": 64,
+
+    # --- Word2Vec is an optional experiment only, never required (§14) ---
+    "enable_word2vec_experiment": False,
+
+    # --- validation thresholds (§19, §23, §24, §46) ---
+    "min_question_words": 5,
+    "max_question_words": 40,
+    "duplicate_similarity_threshold": 0.85,
+    "max_candidate_overlap": 0.6,
+
+    # --- reproducibility ---
+    "random_seed": 42,
 }
 ```
 
-Keep configuration separate from core code.
+## 54.1 Configuration Rules
+
+- **`question_model_backend` must be set explicitly before a run.** The system
+  must **never silently switch backends mid-run** — otherwise two runs labelled
+  "local" and "hf_api" could produce results from different models and quietly
+  break reproducibility. If the configured backend fails, the run *fails with a
+  clear error* (§52) and the user chooses to switch, which changes the recorded
+  config.
+- **`question_model_name` is fixed** to `google/flan-t5-base`, with
+  `google/flan-t5-small` available only as an explicitly documented fallback for
+  low-memory machines (§16.0). Changing it changes the recorded config.
+- **The backend record** (`backend`, `model_name`) is stored inside
+  `generation_records` for every question (§49.1), so each MCQ is traceable to
+  the exact model and execution path that produced it.
+- **Keep configuration separate from core code** — `CONFIG` lives in one place
+  (`config.py`) and is injected into the pipeline, never hard-coded inside
+  modules.
+- Every run's effective `CONFIG` is returned inside the result object
+  (`"config"`, §49.1) and written to `outputs/logs/` so results can be audited.
 
 ------------------------------------------------------------------------
 
 # 55. Suggested Development Order
+
+> **Mapping note:** the "Step" numbers below are an *implementation ordering*, not
+> the project phase numbers. Phases come only from §7.1. Approximate mapping:
+> Step 1 → Phase 0 · Step 2 → Phase 2 · Step 3 → Phase 3 · Steps 4–5 → Phase 4 ·
+> Steps 6–7 → Phase 5 (+ optional fine-tuning) · Step 8 → Phase 6 ·
+> Step 9 → Phase 7 · Step 10 → Phase 8 · Steps 11–12 → Phase 9 ·
+> Step 13 → Phase 10.
 
 ## Step 1 --- Create the repository
 
@@ -2028,7 +2658,7 @@ RAKE
 spaCy noun phrases
 ```
 
-## Step 5 --- Implement embeddings
+## Step 5 --- Implement representations
 
 Start with:
 
@@ -2039,24 +2669,35 @@ TF-IDF
 Then implement:
 
 ``` text
+Sentence Transformer (all-MiniLM-L6-v2)   ← core, for all semantic similarity
+```
+
+Optional word-level experiment only:
+
+``` text
 Word2Vec
 ```
 
 ## Step 6 --- Build question generation
 
-Start with a pretrained Transformer.
+Start with the fixed pretrained Transformer (§16.0): `google/flan-t5-base`
+(`google/flan-t5-small` as the documented low-memory fallback). Backend is
+explicit (§16.1).
 
 ## Step 7 --- Experiment with fine-tuning
 
-Only after the baseline works.
+Only after the baseline works. SQuAD is a reading-comprehension dataset used
+for **answer-aware question generation** (§17).
 
 ## Step 8 --- Build distractor generation
 
-Start with corpus/embedding-based candidates.
+Implement the **fixed distractor pipeline** (§21.1): textbook/corpus candidates
+→ semantic embedding similarity → type/domain filter → contextual incorrectness
+→ top 3. WordNet is an optional fallback (§21.2).
 
 ## Step 9 --- Build validation
 
-Reject poor MCQs.
+Reject poor MCQs, including the critical failures in §24.
 
 ## Step 10 --- Build evaluation scripts
 
@@ -2113,35 +2754,89 @@ The following can be considered extensions:
 
 # 57. Recommended Strong Version
 
-For a stronger academic implementation:
+For a stronger academic implementation. This is the **concrete target
+architecture** — every box names a specific, implemented method.
 
 ``` text
-PDF/Text
-   ↓
-Preprocessing
-   ↓
-Chunking
-   ↓
-RAKE + spaCy
-   ↓
-Candidate Answer Ranking
-   ↓
-Word2Vec / TF-IDF
-   ↓
-Base T5
-   ↓
-Fine-tuned T5
-   ↓
-Hybrid Distractor Generation
-   ↓
-MCQ Validation
-   ↓
-Semantic Duplicate Filtering
-   ↓
-Human + Automatic Evaluation
-   ↓
-Interactive Streamlit Application
+                 PDF / TEXT
+                     │
+                     ▼
+              PDF Extraction              (§8.2, §9)
+                     │
+                     ▼
+             Preprocessing                (§9)
+                     │
+                     ▼
+          Sentence Segmentation           (§10)
+                     │
+                     ▼
+                Chunking                  (§11, overlapping)
+                     │
+                     ▼
+       ┌─────────────────────────┐
+       │ Candidate Extraction    │        (§12)
+       │ RAKE + spaCy            │
+       └────────────┬────────────┘
+                    ▼
+          Candidate Ranking               (§13)
+          TF-IDF + features
+                    │
+                    ▼
+            Answer Candidate
+                    │
+                    ▼
+        ┌───────────────────────┐
+        │ Question Generation   │         (§16, FLAN-T5)
+        └───────────┬───────────┘
+                    ▼
+           Question Validation            (§19)
+                    │
+                    ▼
+        ┌───────────────────────┐
+        │ Distractor Candidates │         (§21, textbook concepts)
+        └───────────┬───────────┘
+                    ▼
+          Semantic Embeddings             (§14, Sentence Transformer)
+                    │
+                    ▼
+          Type / Domain Filter            (§23 Check 5)
+                    │
+                    ▼
+       Contextual Incorrectness           (§23 Check 4)
+                    │
+                    ▼
+            Top 3 Distractors
+                    │
+                    ▼
+             Final Validation             (§24)
+                    │
+                    ▼
+        Semantic Duplicate Check          (§46)
+                    │
+                    ▼
+              FINAL MCQ
+                    │
+                    ▼
+             Streamlit / Quiz             (§26, §31, §51)
 ```
+
+## 57.1 Embedding Roles Are Separated by Purpose
+
+There is **one semantic representation** (Sentence Transformer) and **one
+lexical/statistical representation** (TF-IDF). They are not interchangeable and
+each is used only for its stated job:
+
+| Purpose                      | Method                      | Section |
+| ---------------------------- | --------------------------- | ------- |
+| Candidate importance         | TF-IDF                      | §12, §13 |
+| Candidate ranking            | TF-IDF + linguistic features | §13 |
+| Semantic similarity          | Sentence Transformer        | §14, §46 |
+| Distractor similarity        | Sentence Transformer        | §21, §42 |
+| Duplicate-question detection | Sentence Transformer        | §46 |
+| Word-level experiment        | Word2Vec (**optional**)     | §14, §39 Exp 5 |
+
+**This table is the single source of truth for "which embedding are we using?"**
+Word2Vec is deliberately excluded from the required pipeline (§14).
 
 ------------------------------------------------------------------------
 
@@ -2151,22 +2846,39 @@ The final report can contain tables such as:
 
 ### Question Generation
 
-  Model               BLEU    ROUGE   Human Quality
-  --------------- -------- -------- ---------------
-  Baseline          Actual   Actual          Actual
-  Base T5           Actual   Actual          Actual
-  Fine-tuned T5     Actual   Actual          Actual
+  Model                      BLEU    ROUGE   Source Support   Human Quality
+  ------------------------- -------- -------- --------------- --------------
+  Template Baseline (§38)    Actual   Actual   Actual              Actual
+  FLAN-T5 base               Actual   Actual   Actual              Actual
+  FLAN-T5 fine-tuned         Actual   Actual   Actual              Actual
 
 ### Distractor Generation
 
-  Method       Plausibility   Correctness   Diversity
-  ---------- -------------- ------------- -----------
-  WordNet            Actual        Actual      Actual
-  Word2Vec           Actual        Actual      Actual
-  Hybrid             Actual        Actual      Actual
+  Method                 Plausibility   Incorrectness   Diversity   Similarity
+  --------------------- -------------- --------------- ----------- -----------
+  Embedding similarity        Actual         Actual        Actual      Actual
+  Full pipeline (§21.1)       Actual         Actual        Actual      Actual
+
+### Candidate Extraction (Experiment 1)
+
+  Method        Candidates   Gold Overlap   Precision   Recall
+  ------------ ------------ ------------- ----------- --------
+  RAKE             Actual        Actual        Actual    Actual
+  spaCy NPs        Actual        Actual        Actual    Actual
+  RAKE + spaCy     Actual        Actual        Actual    Actual
 
 **Important:** Replace every `Actual` with measured results. Never
 fabricate evaluation numbers.
+
+**Reporting rules:**
+
+- The **primary table** is human + source-grounded evaluation (§40.1, §41).
+  BLEU/ROUGE are reported beside it as secondary diagnostics, never alone.
+- WordNet and Word2Vec rows appear **only if** those optional experiments
+  (§39 Exp 4/5) were actually run. Do not include rows for experiments that
+  were not performed.
+- Every row must state the model and backend used (`google/flan-t5-base`,
+  `local` or `hf_api`) so the numbers are traceable (§54.1).
 
 ------------------------------------------------------------------------
 
@@ -2926,21 +3638,39 @@ The final system can be summarized as:
                      ▼
           ┌────────────────────┐
           │ Candidate Ranking  │
-          │ TF-IDF / Embedding │
+          │ TF-IDF + features  │
           └──────────┬─────────┘
                      ▼
           ┌────────────────────┐
           │ Question Generator │
-          │ T5 / FLAN-T5      │
+          │ FLAN-T5 (base/     │
+          │ small; local/API)  │
+          └──────────┬─────────┘
+                     ▼
+          ┌────────────────────┐
+          │ Question Validation│
           └──────────┬─────────┘
                      ▼
           ┌────────────────────┐
           │ Distractor         │
-          │ Generation         │
+          │ Candidates         │
+          │ (textbook concepts)│
           └──────────┬─────────┘
                      ▼
           ┌────────────────────┐
-          │ MCQ Validation     │
+          │ Semantic Embedding │
+          │ Similarity         │
+          │ (Sentence Transf.) │
+          └──────────┬─────────┘
+                     ▼
+          ┌────────────────────┐
+          │ Type / Domain +    │
+          │ Incorrectness Check│
+          └──────────┬─────────┘
+                     ▼
+          ┌────────────────────┐
+          │ MCQ Validation +   │
+          │ Duplicate Filtering│
           └──────────┬─────────┘
                      ▼
           ┌────────────────────┐
@@ -2960,32 +3690,42 @@ The final system can be summarized as:
 The recommended final implementation is:
 
 ``` text
-                 FRONTEND
-              Streamlit UI
-                    │
-                    ▼
-              APPLICATION
-                 LAYER
-                    │
-                    ▼
-             NLP PIPELINE
-                    │
-       ┌────────────┼────────────┐
-       ▼            ▼            ▼
-  Preprocessing  Extraction   Generation
-       │            │            │
-       │            │       ┌────┴─────┐
-       │            │       ▼          ▼
-       │            │    Questions  Distractors
-       │            │       └────┬─────┘
-       │            │            ▼
-       └────────────┴────── Validation
-                              │
-                              ▼
-                         Final MCQs
-                              │
-                              ▼
-                         Quiz / Export
+                     FRONTEND
+                  Streamlit UI  (app.py)
+                         │
+                         ▼
+                   APPLICATION LAYER
+                         │
+                         ▼
+                   NLP PIPELINE
+                   (src/pipeline.py)
+                         │
+   ┌──────────────┬──────┴───────┬────────────────┐
+   ▼              ▼              ▼                ▼
+Preprocessing  Extraction    Generation       Validation
+src/           src/          src/             src/
+preprocessing  keyword_      question_        validator
+chunking       extractor     generator
+               ranking       distractor_
+               embeddings    generator
+   │              │              │                │
+   └──────────────┴──────┬───────┴────────────────┘
+                         ▼
+                  Structured result dict
+                  (§49, includes intermediate
+                   stages for the UI)
+                         │
+                         ▼
+                  Final MCQs + Quiz / Export
+```
+
+Representations used per stage (see §5.2):
+
+``` text
+Extraction + Ranking   →  TF-IDF + linguistic features
+Generation input       →  FLAN-T5 prompt (context + answer)
+Semantic similarity    →  Sentence Transformer (all-MiniLM-L6-v2)
+Word-level experiment  →  Word2Vec (optional, not core)
 ```
 
 The most important architectural principle is:
@@ -3028,6 +3768,46 @@ interactive MCQs**.
 
 The original proposal references should be retained and corrected to use
 actual web URLs rather than `mailto:` links.
+
+## 75.1 Core Method References (added)
+
+These references support the concrete choices fixed in this plan (§5.2, §14, §16,
+§21, §35.2.1, §38) and should be cited where those choices are justified.
+
+- **FLAN-T5 / instruction-tuned T5** (question-generation model, §16.0):
+  Chung, H. W., et al. (2022). *Scaling Instruction-Finetuned Language Models*.
+  arXiv:2210.11416.
+- **Sentence-BERT / Sentence Transformers** (semantic similarity backbone, §14.2):
+  Reimers, N., & Gurevych, I. (2019). *Sentence-BERT: Sentence Embeddings using
+  Siamese BERT-Networks*. EMNLP. The `all-MiniLM-L6-v2` model card is at
+  `https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2`.
+- **RAKE** (candidate extraction, §12):
+  Rose, S., Engel, D., Cramer, N., & Cowley, W. (2010). *Automatic Keyword
+  Extraction from Individual Documents*. In *Text Mining: Applications and
+  Theory*.
+- **Baseline MCQ generation from text** (template baseline rationale, §38):
+  Nwafor, C. A., & Onyenwe, I. E. *An Automated Multiple-Choice Question
+  Generation Using Natural Language Processing Techniques*. arXiv.
+- **Evaluation of question generation** (BLEU/ROUGE as secondary metrics, §40):
+  Papineni, K., et al. (2002). *BLEU: a Method for Automatic Evaluation of
+  Machine Translation*. ACL. Lin, C.-Y. (2004). *ROUGE: A Package for Automatic
+  Evaluation of Summaries*. Text Summarization Branches Out.
+
+## 75.2 Fixed Evaluation Corpus Reference (added)
+
+The baseline target text fixed in §35.2.1 must be cited exactly, with its
+license, in the report and in `data/evaluation/README.md`:
+
+> Bonaventure, O. *Computer Networking: Principles, Protocols and Practice*.
+> Open textbook. **Chapter: The Transport Layer** (UDP and TCP).
+> License: **Creative Commons Attribution 3.0 Unported (CC BY 3.0)**.
+> Source: `https://github.com/obonaventure/cnp3` /
+> `https://inl.info.ucl.ac.be/cnp3`.
+
+Record the exact version/edition, the retrieval date, and the chapter's
+page/sentence/chunk counts alongside the file (§36).
+
+## 75.3 Original Proposal References
 
 1.  Neupane, A., Chaudhari, S., & Shah, S. (2025). *An Automated MCQ
     Generator using NLP*. International Journal of Innovative Science
