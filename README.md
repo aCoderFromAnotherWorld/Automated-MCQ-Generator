@@ -32,8 +32,8 @@ Place the official SQuADv2 JSON files in `data/raw/`, then prepare answer-aware
 JSONL files and fine-tune locally:
 
 ```powershell
-python -m training.prepare_squad --input data/raw/train-v2.0.json --output data/training/squadv2_train.jsonl
-python -m training.prepare_squad --input data/raw/dev-v2.0.json --output data/training/squadv2_validation.jsonl
+python -m training.prepare_squad --split train --input data/raw/train-v2.0.json --output data/training/squadv2_train.jsonl
+python -m training.prepare_squad --split validation --input data/raw/dev-v2.0.json --output data/training/squadv2_validation.jsonl
 python -m training.train_qg --train data/training/squadv2_train.jsonl --validation data/training/squadv2_validation.jsonl --output models/question_generation/flan-t5-squadv2
 ```
 

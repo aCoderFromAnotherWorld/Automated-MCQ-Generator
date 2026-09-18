@@ -50,7 +50,7 @@ handoff contract states exactly what is available now.
 
 | Done | ID | Implementable task | Owns | Depends on | Safe handoff contract |
 |---|---|---|---|---|---|
-| [ ] | M00 | Repository scaffolding | `src/__init__.py`, config, dependencies, test layout | None | Imports work; tests can run |
+| [x] | M00 | Repository scaffolding | `src/__init__.py`, config, dependencies, test layout | None | Imports work; tests can run |
 | [ ] | M01 | Pipeline result contract | schema tests and typed/documented result shape | M00 | `generate_mcqs(...)` returns all required top-level keys |
 | [ ] | M02 | Raw-text input adapter | `src/input_handler.py` | M01 | Text input becomes a validated source artifact |
 | [ ] | M03 | PDF extraction adapter | `src/pdf_processor.py` | M01 | PDF input becomes ordered page text plus metadata |
@@ -70,7 +70,13 @@ handoff contract states exactly what is available now.
 | [ ] | M17 | Documentation and release | README, report, reproducibility records | M13–M16 | Setup, tests, limitations, and known gaps are current |
 | [ ] | M18 | SQuADv2 preparation | `training/prepare_squad.py` | M00 | Answerable context-answer-question JSONL |
 | [ ] | M19 | Local QG fine-tuning | `training/train_qg.py` | M18 | Locally saved FLAN-T5 checkpoint and tokenizer |
-| [ ] | M20 | Trained-checkpoint integration | `src/question_generator.py`, config | M09, M19 | Inference uses the recorded local checkpoint |
+| [x] | M20 | Trained-checkpoint integration adapter | `src/question_generator.py`, config | M09, M19 | Local-checkpoint loader and traceable generation record are implemented; activation awaits M19 output |
+
+> **Current training status:** the M18/M19 code paths support the supplied
+> Parquet schema, but those tasks remain unchecked until separate train and
+> validation splits have been prepared and a local fine-tuning run produces the
+> checkpoint. M20 is checked only for the implemented adapter, not for a
+> completed trained-model run.
 
 #### Safe task rules
 
@@ -105,23 +111,23 @@ for work actually completed.
 
 ## 1. Repository Scaffolding  *(Phase 0)*
 
-- [ ] Create folder structure (per `ProjectDetails.md` §47):
-  - [ ] `src/` (Python package with `__init__.py`)
-  - [ ] `data/raw/`, `data/processed/`, `data/training/`, `data/evaluation/`
-  - [ ] `models/embeddings/`, `models/question_generation/`, `models/distractor/`
-  - [ ] `training/` (local SQuADv2 preparation and fine-tuning scripts)
-  - [ ] `ui/` (Streamlit presentation helpers only)
-  - [ ] `notebooks/`
-  - [ ] `evaluation/results/`
-  - [ ] `outputs/generated_mcqs/`, `outputs/logs/`
-- [ ] Create `requirements.txt` (start minimal, grow per phase).
-- [ ] Create `.gitignore` (ignore `data/`, `models/`, `outputs/`, `__pycache__`, `.ipynb_checkpoints`, venv).
-- [ ] Create `config.py` with the base `CONFIG` dict (§54).
-- [ ] Keep UI imports under `ui/` and NLP/runtime imports under `src/`.
-- [ ] Expand `README.md` with setup + run instructions (currently only a title).
-- [ ] Add `tests/` directory for unit tests.
+- [x] Create folder structure (per `ProjectDetails.md` §47):
+  - [x] `src/` (Python package with `__init__.py`)
+  - [x] `data/raw/`, `data/processed/`, `data/training/`, `data/evaluation/`
+  - [x] `models/embeddings/`, `models/question_generation/`, `models/distractor/`
+  - [x] `training/` (local SQuADv2 preparation and fine-tuning scripts)
+  - [x] `ui/` (Streamlit presentation helpers only)
+  - [x] `notebooks/`
+  - [x] `evaluation/results/`
+  - [x] `outputs/generated_mcqs/`, `outputs/logs/`
+- [x] Create `requirements.txt` (start minimal, grow per phase).
+- [x] Create `.gitignore` (ignore `data/`, `models/`, `outputs/`, `__pycache__`, `.ipynb_checkpoints`, venv).
+- [x] Create `config.py` with the base `CONFIG` dict (§54).
+- [x] Keep UI imports under `ui/` and NLP/runtime imports under `src/`.
+- [x] Expand `README.md` with setup + run instructions.
+- [x] Add `tests/` directory for unit tests.
 
-**Deliverable:** clean, runnable skeleton committed to Git.
+**Deliverable:** clean, runnable skeleton ready to commit to Git.
 
 ---
 
