@@ -59,9 +59,12 @@ duplicating logic in an upstream module or in `app.py`.
 | M12 | MCQ assembly and validation | `src/mcq_validator.py` | M10, M11 | Rejects critical failures and returns validated MCQs only |
 | M13 | Pipeline orchestration | `src/pipeline.py` | M02–M12 | Connects modules without owning their internal algorithms |
 | M14 | Evaluation | `evaluation/` | M13 | Reports measured results without changing generation behavior |
-| M15 | Streamlit integration | `app.py`, UI helpers | M01, M13 | UI consumes the result contract; no NLP logic in the UI |
+| M15 | Streamlit integration | `app.py`, `ui/` | M01, M13 | UI consumes the result contract; no NLP logic in the UI |
 | M16 | Quiz mode hardening | UI quiz state/tests | M15, M13 | Quiz operates only on validated MCQs |
 | M17 | Documentation and release | README, report, reproducibility records | M13–M16 | Setup, tests, limitations, and known gaps are current |
+| M18 | SQuADv2 preparation | `training/prepare_squad.py` | M00 | Answerable context-answer-question JSONL |
+| M19 | Local QG fine-tuning | `training/train_qg.py` | M18 | Locally saved FLAN-T5 checkpoint and tokenizer |
+| M20 | Trained-checkpoint integration | `src/question_generator.py`, config | M09, M19 | Inference uses the recorded local checkpoint |
 
 #### Safe task rules
 
@@ -77,6 +80,8 @@ duplicating logic in an upstream module or in `app.py`.
   because a stub or UI placeholder exists.
 - The current completed scope is M15's UI shell and M16's quiz interaction;
   their NLP-pipeline integration remains unchecked until M13 is implemented.
+- Local SQuADv2 training is mandatory: M18, M19, and M20 must not be marked
+  optional or skipped because the runtime UI exists.
 
 #### Prompt handoff template
 
@@ -98,12 +103,15 @@ for work actually completed.
   - [ ] `src/` (Python package with `__init__.py`)
   - [ ] `data/raw/`, `data/processed/`, `data/training/`, `data/evaluation/`
   - [ ] `models/embeddings/`, `models/question_generation/`, `models/distractor/`
+  - [ ] `training/` (local SQuADv2 preparation and fine-tuning scripts)
+  - [ ] `ui/` (Streamlit presentation helpers only)
   - [ ] `notebooks/`
   - [ ] `evaluation/results/`
   - [ ] `outputs/generated_mcqs/`, `outputs/logs/`
 - [ ] Create `requirements.txt` (start minimal, grow per phase).
 - [ ] Create `.gitignore` (ignore `data/`, `models/`, `outputs/`, `__pycache__`, `.ipynb_checkpoints`, venv).
 - [ ] Create `config.py` with the base `CONFIG` dict (§54).
+- [ ] Keep UI imports under `ui/` and NLP/runtime imports under `src/`.
 - [ ] Expand `README.md` with setup + run instructions (currently only a title).
 - [ ] Add `tests/` directory for unit tests.
 
@@ -228,6 +236,17 @@ for work actually completed.
 
 **Deliverable:** `text → TF-IDF scores + Sentence Transformer vectors` + similarity utilities.
 
+### Explainable embedding and training flow
+
+- [ ] Explain raw text/PDF extraction before any representation is built.
+- [ ] Explain TF-IDF as sparse term-weight vectors for candidate importance and ranking.
+- [ ] Explain Sentence Transformer output as dense sentence/phrase vectors for semantic similarity.
+- [ ] Explain why these embeddings support selection and validation but do not replace FLAN-T5 training.
+- [ ] Explain SQuADv2 tokenization: context-plus-answer input, question target, token IDs, masks, and labels.
+- [ ] Explain local forward pass, loss calculation, backpropagation, optimizer update, and checkpoint saving.
+- [ ] Explain inference: textbook context plus selected answer → fine-tuned model → question text → validation.
+- [ ] Show one complete trace in the report and Streamlit intermediate panels.
+
 ---
 
 ## 9. Question Generation  *(Phase 5)*
@@ -235,6 +254,8 @@ for work actually completed.
 > Model is **fixed** (§16.0): `google/flan-t5-base` primary,
 > `google/flan-t5-small` documented low-memory fallback. Backend is **explicit**
 > (§16.1) — never auto-switched mid-run.
+> After M19, the local backend must load the derived checkpoint recorded in
+> `CONFIG["question_model_checkpoint"]`.
 
 - [ ] `src/question_generator.py` — `generate_question(context, answer)`.
 - [ ] **`question_model_name` fixed to `google/flan-t5-base`** (fallback
@@ -389,17 +410,19 @@ for work actually completed.
 
 ---
 
-## 17. Fine-Tuning (Optional / Strong Version)  *(Optional — only after Phase 5 works)*
+## 17. Required Local SQuADv2 Training  *(Cross-cutting; required before final release)*
 
 > **Wording matters (§17):** SQuAD is a *reading-comprehension* dataset, not a
 > dedicated MCQ/question-generation dataset. It is used here only for
 > **answer-aware question generation** (context + answer → question). Say exactly
 > this in the report; do not call it an MCQ dataset.
 
-- [ ] Prepare SQuAD / SQuAD 2.0 data (§35.1) as answer-aware QG pairs.
-- [ ] Fine-tune the chosen FLAN-T5 checkpoint (§16.1) for question generation.
+- [ ] Download/place the official SQuADv2 train and validation JSON files under `data/raw/`.
+- [ ] Run `training/prepare_squad.py`; exclude `is_impossible` records and write JSONL pairs.
+- [ ] Run `training/train_qg.py` locally with PyTorch and Transformers; do not use the HF inference API for training.
+- [ ] Save the tokenizer and fine-tuned checkpoint under `models/question_generation/`.
 - [ ] Compare base vs. fine-tuned experimentally (§17) on the **held-out** fixed chapter (§35.2.1).
-- [ ] Document hyperparameters, seed, dataset version.
+- [ ] Document hyperparameters, seed, dataset version, hardware, package versions, and record counts.
 - [ ] Keep the fixed evaluation chapter (§35.2.1) completely separate from all
       SQuAD training/validation data — never evaluate on training examples (§37).
 
@@ -546,7 +569,8 @@ A user can:
       (§5.2/§14):** TF-IDF (candidate importance/ranking) + Sentence Transformer
       `all-MiniLM-L6-v2` (semantic similarity / duplicates / distractor ranking)
       are core; Word2Vec is an **optional word-level experiment only**.
-- [ ] Is fine-tuning feasible given compute/time?
+- [x] Is local fine-tuning required? **Resolved:** yes; train/adapt FLAN-T5
+      locally on answerable SQuADv2 records before final release.
 - [x] Which evaluation textbook corpus to use (license/source)? **Resolved
       (§35.2.1):** *Computer Networking: Principles, Protocols and Practice*
       by Olivier Bonaventure (CC BY 3.0), Chapter 3 — The Transport Layer

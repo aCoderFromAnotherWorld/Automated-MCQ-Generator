@@ -26,7 +26,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from config import CONFIG, QUESTION_BACKENDS, QUESTION_MODELS
-from src.ui_support import extract_pdf_pages, normalize_result
+from ui.support import extract_pdf_pages, normalize_result
 
 
 st.set_page_config(page_title="Automated MCQ Generator", page_icon="📝", layout="wide")

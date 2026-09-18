@@ -345,9 +345,10 @@ another). The table below is the **single source of truth for phase numbering**.
   Phase 10 Integration, testing, documentation    End-to-end tested + documented
                                                   project
 
-**Optional / cross-cutting (not a phase):** fine-tuning (§17), experimental
-comparisons (§39), export extras (§34). These are *add-ons* that are scheduled
-only after the corresponding phase is working.
+**Cross-cutting work:** local SQuADv2 question-generation training (§17) is a
+required workstream, not an optional add-on. Experimental comparisons (§39) and
+export extras (§34) remain optional and are scheduled only after the relevant
+core phase is working.
 
 ------------------------------------------------------------------------
 
@@ -809,10 +810,13 @@ options open makes both the implementation and the experiments ambiguous.
 
 Rules:
 
--   **Exactly these two checkpoints.** Do not add other checkpoints mid-project
-    without recording the change.
--   The model is set by `CONFIG["question_model"]`, which must be one of
+-   **Exactly these two base checkpoints are allowed.** Do not add another base
+    architecture mid-project without recording the change.
+-   The base model is set by `CONFIG["question_model"]`, which must be one of
     `"google/flan-t5-base"` or `"google/flan-t5-small"`.
+-   Local inference after M19 uses the derived checkpoint at
+    `CONFIG["question_model_checkpoint"]`; this is a trained copy of the
+    selected base model, not a third base architecture.
 -   The model choice and the execution backend (§16.1) are **independent
     settings.** Choosing the HF API backend does not change which model is
     requested; it only changes *where* it runs.
@@ -847,10 +851,12 @@ backends** behind a single, stable interface. The question-generation module
 `generate_question(context, answer)` --- while the backend is selected by
 configuration. Swapping backends must **not** require changing any calling code.
 
-### Backend A --- Local Model (default for small models / final demo)
+### Backend A --- Local Model (required for the trained final model)
 
--   Load the checkpoint fixed in §16.0 — `google/flan-t5-base` (primary) or
-    `google/flan-t5-small` (fallback).
+-   Load the locally trained checkpoint from
+    `CONFIG["question_model_checkpoint"]` after M19; use the selected base
+    checkpoint only for pre-training smoke tests or before the local artifact
+    exists.
 -   Load the model **once** and cache it; never reload per request.
 -   Use GPU if available, otherwise fall back to CPU gracefully.
 -   Suitable when a lightweight model runs acceptably on the local machine.
@@ -910,14 +916,24 @@ CONFIG["question_model_backend"]
 
 ------------------------------------------------------------------------
 
-# 17. Fine-Tuning Strategy
+# 17. Required Local SQuADv2 Training Strategy
 
-A pretrained question-generation model can first be tested directly.
+The project must train/adapt its question-generation model on the local
+machine using the selected dataset: **SQuAD 2.0**. The base checkpoint is
+FLAN-T5, and the training script is maintained under `training/train_qg.py`.
+Hosted inference may be used only as an explicitly selected runtime backend;
+it does not replace local training.
 
-Then, if computational resources permit, fine-tune it on a
-question-generation dataset.
+The workflow is split into two reproducible scripts:
 
-A suitable starting dataset is **SQuAD / SQuAD 2.0**.
+1. `training/prepare_squad.py` filters out unanswerable records and converts
+   SQuADv2 into JSONL records with `input_text` and `target_text`.
+2. `training/train_qg.py` loads those records and fine-tunes FLAN-T5 locally
+   with Transformers, PyTorch, and the local machine's CPU/GPU.
+
+The resulting checkpoint is saved under
+`models/question_generation/flan-t5-squadv2/` and is later loaded by
+`src/question_generator.py` for inference.
 
 ### Important wording for the report
 
@@ -981,6 +997,41 @@ adaptation affects generation quality.
 
 Do not assume that fine-tuning will always produce better results;
 measure the difference experimentally.
+
+### 17.1 Raw text to trained model to generated question
+
+The complete explainable path is:
+
+```text
+SQuADv2 JSON
+  → filter unanswerable records
+  → normalize context and answer spans
+  → input: context + answer
+  → FLAN-T5 tokenizer
+  → token IDs and attention masks
+  → local gradient training / checkpoint saving
+  → fine-tuned FLAN-T5 checkpoint
+
+Textbook PDF or raw text
+  → extraction and cleaning
+  → sentence segmentation and overlapping chunks
+  → RAKE/spaCy candidate extraction
+  → TF-IDF candidate ranking
+  → selected context + answer
+  → Sentence Transformer embeddings for semantic checks
+  → fine-tuned FLAN-T5 question generation
+  → question validation
+  → textbook concept distractor ranking
+  → final MCQ validation
+  → Streamlit display and quiz
+```
+
+The embedding layer has two deliberately separate roles. TF-IDF is a sparse,
+interpretable representation used for candidate importance and ranking.
+Sentence Transformer embeddings are dense semantic vectors used for
+question-to-context relevance, distractor similarity, and duplicate-question
+detection. The embedding layer does not train FLAN-T5; it supports selection,
+similarity, and validation around the trained generator.
 
 ------------------------------------------------------------------------
 
@@ -1639,7 +1690,9 @@ Question
 Answer
 ```
 
-This can be used for question-generation experimentation or fine-tuning.
+This is the required local training/adaptation dataset for the question-generation
+model. The training workflow is implemented in `training/` and runs on the
+developer's machine.
 
 > **Wording caveat (see §17):** SQuAD is a **reading-comprehension** dataset, not a
 > dedicated question-generation or MCQ dataset. It is used here only as a source
@@ -1893,7 +1946,7 @@ Word2Vec is **not** a core component (§14). It may be trained on the corpus as 
 word-level side experiment and reported as such, but it must not be required for
 the main pipeline to run.
 
-## Fine-Tuning Comparison (optional, expensive)
+## Fine-Tuning Comparison (optional analysis; local training is required)
 
 ``` text
 Base FLAN-T5
@@ -1901,7 +1954,8 @@ vs
 FLAN-T5 fine-tuned on SQuAD-style answer-aware QG data
 ```
 
-Only if compute permits (§17). Never evaluate on training data (§37).
+Compare the base and locally fine-tuned checkpoints when resources permit;
+never evaluate on training data (§37).
 
 ------------------------------------------------------------------------
 
@@ -2205,6 +2259,16 @@ mcq-generator/
 │   ├── ranking.py
 │   └── pipeline.py
 │
+├── training/
+│   ├── __init__.py
+│   ├── prepare_squad.py
+│   ├── train_qg.py
+│   └── README.md
+│
+├── ui/
+│   ├── __init__.py
+│   └── support.py
+│
 ├── evaluation/
 │   ├── metrics.py
 │   ├── human_evaluation.csv
@@ -2268,8 +2332,9 @@ Responsibilities:
 Responsibilities:
 
 -   Build model input from context + answer (§16)
--   **Load the fixed FLAN-T5 checkpoint once** and cache it (§16.0);
-      model loading separated from generation
+-   **Load the locally trained FLAN-T5 checkpoint once** and cache it (§16.0);
+      model loading separated from generation. Use the base checkpoint only
+      before M19 has produced the local artifact.
 -   Ask for the workload without prescribing the backend
 -   **Pluggable, explicitly configured backend** (§16.1): `local` or `hf_api`.
       The backend is fixed before the run and **never switched mid-run** (§54.1)
@@ -2302,6 +2367,37 @@ Responsibilities:
 Responsibilities:
 
 -   Connect all modules
+
+## `training/prepare_squad.py`
+
+Responsibilities:
+
+-   Read official SQuADv2 JSON files
+-   Exclude unanswerable questions
+-   Normalize context and answer spans
+-   Write reproducible answer-aware QG JSONL records
+
+## `training/train_qg.py`
+
+Responsibilities:
+
+-   Load prepared local JSONL data
+-   Tokenize context-plus-answer inputs and question targets
+-   Fine-tune FLAN-T5 locally with PyTorch and Transformers
+-   Save the tokenizer, model checkpoint, and training configuration
+
+## `ui/` and `app.py`
+
+Responsibilities:
+
+-   Render controls and pipeline artifacts
+-   Display final validated MCQs and source context
+-   Manage quiz state and presentation-only PDF preview
+-   Call `src.pipeline.generate_mcqs()` through the documented contract
+
+The UI must not import training internals, implement embeddings, rank
+candidates, generate questions, or validate MCQs. `src/` must remain usable
+from scripts and tests without Streamlit.
 
 ------------------------------------------------------------------------
 
@@ -2617,7 +2713,7 @@ CONFIG = {
 > **Mapping note:** the "Step" numbers below are an *implementation ordering*, not
 > the project phase numbers. Phases come only from §7.1. Approximate mapping:
 > Step 1 → Phase 0 · Step 2 → Phase 2 · Step 3 → Phase 3 · Steps 4–5 → Phase 4 ·
-> Steps 6–7 → Phase 5 (+ optional fine-tuning) · Step 8 → Phase 6 ·
+> Steps 6–7 → Phase 5 (+ required local SQuADv2 training) · Step 8 → Phase 6 ·
 > Step 9 → Phase 7 · Step 10 → Phase 8 · Steps 11–12 → Phase 9 ·
 > Step 13 → Phase 10.
 

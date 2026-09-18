@@ -1,8 +1,4 @@
-"""Small, non-NLP helpers used by the Streamlit interface.
-
-This module intentionally contains presentation/input-preview concerns only.
-It must not grow question-generation, ranking, or validation logic.
-"""
+"""Non-NLP helpers used by the Streamlit presentation layer."""
 
 from __future__ import annotations
 
@@ -28,12 +24,7 @@ RESULT_KEYS = (
 
 
 def extract_pdf_pages(file_bytes: bytes) -> list[str]:
-    """Return extracted page text for a user-uploaded text PDF.
-
-    ``pypdf`` is imported lazily so importing UI helpers does not require the
-    optional PDF dependency.  Scanned/image-only PDFs correctly return empty
-    page text; OCR is outside the web-interface phase.
-    """
+    """Extract page text for UI preview; OCR is intentionally out of scope."""
 
     from pypdf import PdfReader
 
@@ -42,12 +33,7 @@ def extract_pdf_pages(file_bytes: bytes) -> list[str]:
 
 
 def normalize_result(result: Mapping[str, Any] | None, config: Mapping[str, Any]) -> dict[str, Any]:
-    """Make an eventual pipeline response safe for UI rendering.
-
-    Pipeline implementations remain responsible for producing the documented
-    schema. This defensive normalization lets the UI show partial/failure
-    results without key errors while the project is developed incrementally.
-    """
+    """Make an eventual pipeline result safe for rendering during development."""
 
     value = dict(result or {})
     defaults: dict[str, Any] = {

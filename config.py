@@ -6,6 +6,9 @@ hard-codes choices that later pipeline modules also need to use.
 
 CONFIG = {
     "question_model": "google/flan-t5-base",
+    "question_model_checkpoint": "models/question_generation/flan-t5-squadv2",
+    "question_model_training_dataset": "SQuADv2",
+    "question_model_training_mode": "local",
     "question_model_backend": "local",
     "semantic_embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
     "min_input_characters": 120,
