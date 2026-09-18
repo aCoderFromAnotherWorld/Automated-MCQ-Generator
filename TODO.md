@@ -354,6 +354,16 @@
 
 ## 18. Interactive Web Interface (Streamlit)  *(Phase 9)*
 
+### Implementation status (2026-09-19)
+
+- [x] Added the runnable Streamlit interface in `app.py`; it contains no NLP logic.
+- [x] Added text/PDF input, question-count, model, backend, and generate controls.
+- [x] Added renderers for the full pipeline-result schema, final MCQs, source context, and JSON export.
+- [x] Added UI error states for empty/short input, unreadable PDFs, generation errors, and pending pipeline integration.
+- [x] Added stateful quiz controls: select, submit, feedback, next, restart, and score.
+- [ ] Connect `app.py` to the Phase-10 `src.pipeline.generate_mcqs` implementation when it exists.
+- [ ] Add pipeline-owned model caching during pipeline integration; the UI currently caches PDF preview extraction only.
+
 - [ ] `app.py` — import pipeline from `src/`; **no NLP logic in `app.py`** (§49, §73).
 - [ ] Input controls (§27, §34):
   - [ ] PDF upload / text area toggle,
@@ -383,9 +393,9 @@
 
 - [ ] Quiz state: `current_question`, `selected_answer`, `score` (§51).
 - [ ] Per-question flow: options → select → submit → correct/incorrect → explanation + source context.
-- [ ] Final score display (`4 / 5`).
-- [ ] Keep quiz logic separate from NLP generation logic.
-- [ ] Optional: restart quiz, next question.
+- [x] Final score display (`4 / 5`).
+- [x] Keep quiz logic separate from NLP generation logic.
+- [x] Optional: restart quiz, next question.
 
 **Deliverable:** interactive quiz over generated MCQs.
 
