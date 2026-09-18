@@ -576,6 +576,70 @@ Which protocol provides reliable and ordered delivery?
 
 The exact prompt should be adjusted based on the selected model.
 
+## 16.1 Execution Strategy (Local vs. Remote)
+
+T5 and FLAN-T5 are sequence-to-sequence Transformers and can be
+**exceptionally heavy to run locally**. Model size, RAM/VRAM limits, CPU-only
+inference speed, and first-time download size can all become hardware
+bottlenecks, especially on modest student machines.
+
+To keep development unblocked, the project must support **two execution
+backends** behind a single, stable interface. The question-generation module
+(`src/question_generator.py`) should define one function --- for example
+`generate_question(context, answer)` --- while the backend is selected by
+configuration. Swapping backends must **not** require changing any calling code.
+
+### Backend A --- Local Model (default for small models / final demo)
+
+-   Load a small checkpoint such as `t5-small` or `flan-t5-small`/`flan-t5-base`.
+-   Load the model **once** and cache it; never reload per request.
+-   Use GPU if available, otherwise fall back gracefully.
+-   Suitable when a lightweight model runs acceptably on the local machine.
+
+### Backend B --- Hugging Face Inference API (fallback for hardware bottlenecks)
+
+If local execution is too slow or runs out of memory, call the **Hugging Face
+Inference API** instead of running the model locally.
+
+-   Access hosted T5 / FLAN-T5 (or a compatible question-generation model)
+    over HTTPS; no local GPU or large download required.
+-   Requires a Hugging Face access token, supplied via an environment variable
+    (e.g. `HUGGINGFACE_API_TOKEN`). The token must **never** be hard-coded or
+    committed to Git.
+-   Use the `huggingface_hub` / `requests` client to send the same prompt that
+    the local backend would use, and parse the returned text identically.
+-   Apply retries with backoff and a clear timeout; surface a readable error if
+    the API is unreachable, rate-limited, or the token is missing/invalid.
+
+### Backend Selection Rules
+
+``` text
+Try local model (Backend A)
+        ↓
+If out-of-memory / unacceptable latency / no suitable hardware
+        ↓
+Fall back to Hugging Face Inference API (Backend B)
+```
+
+-   Make the backend explicitly selectable in `CONFIG` (e.g.
+    `"question_model_backend": "local"` or `"hf_api"`) so experiments are
+    reproducible.
+-   Record **which backend** was used for every run in the results and report.
+-   Keep both backends interchangeable so the rest of the pipeline (validation,
+    distractors, scoring) is unaffected by the choice.
+
+### Practical Notes
+
+-   During development and unit testing, use a tiny local model or a mocked
+    generation response to avoid repeated heavy calls.
+-   Privacy: sending text to the Inference API transmits document content to an
+    external service. Do not send private or licensed textbook content without
+    the user's explicit permission (see §65).
+-   Network dependence: the API backend requires internet access and is subject
+    to external rate limits; document this as a known limitation.
+-   If neither backend is available, the pipeline should degrade gracefully
+    (clear error message and retry option) rather than crash.
+
 ------------------------------------------------------------------------
 
 # 17. Fine-Tuning Strategy
@@ -1222,6 +1286,49 @@ Possible sources:
 -   Open-access educational documents
 
 Document the source and license/usage conditions.
+
+### 35.2.1 Named Baseline Target Text (Fixed Now, Not Later)
+
+To avoid hunting for text data when the testing phases arrive, the
+**primary evaluation target is fixed now**. All baseline testing and the
+MVP demonstration should be performed on a single, specific chapter:
+
+> **Primary target:** *"Computer Networking: Principles, Protocols and
+> Practice"* by **Olivier Bonaventure** (open textbook, licensed under
+> **Creative Commons Attribution 3.0 Unported (CC BY 3.0)**, source:
+> https://github.com/obonaventure/cnp3, hosted at
+> https://inl.info.ucl.ac.be/cnp3) --- **Chapter 3: The Transport Layer**
+> (the chapter covering UDP and TCP).
+
+Rationale:
+
+-   It is an **openly licensed** textbook, so it can be used, stored, and
+    redistributed in `data/evaluation/` without legal concerns.
+-   Its transport-layer chapter is a natural match for the TCP/UDP
+    examples used throughout this plan (§8, §59), so the expected
+    questions and distractors are easy to sanity-check by hand.
+-   It is a bounded, self-contained unit of text --- ideal for a
+    reproducible baseline.
+
+Concrete setup tasks:
+
+-   [ ] Download the chapter as PDF (or clean text) and store it in
+      `data/evaluation/`.
+-   [ ] Record the exact title, author, edition/version, license, source
+      URL, and retrieval date.
+-   [ ] Record the number of pages, sentences, and resulting chunks after
+      preprocessing.
+-   [ ] Use this single chapter for the Step-by-Step baseline run before
+      testing on any other material.
+
+**Backup target (if the primary is unavailable):** any single openly
+licensed computer-networking chapter that covers TCP and UDP (for
+example, a chapter from another CC-licensed networking textbook or an
+open course chapter). Keep the same rule: **one specific chapter, named
+and stored up front.**
+
+> **Rule:** Never begin the generation/evaluation phase without a
+> concrete, named chapter already sitting in `data/evaluation/`.
 
 ------------------------------------------------------------------------
 
