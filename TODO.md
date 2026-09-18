@@ -42,29 +42,35 @@ marked complete only after its module tests pass and its public contract remains
 compatible with the preceding tasks. Do not implement a downstream task by
 duplicating logic in an upstream module or in `app.py`.
 
-| ID | Implementable task | Owns | Depends on | Safe handoff contract |
-|---|---|---|---|---|
-| M00 | Repository scaffolding | `src/__init__.py`, config, dependencies, test layout | None | Imports work; tests can run |
-| M01 | Pipeline result contract | schema tests and typed/documented result shape | M00 | `generate_mcqs(...)` returns all required top-level keys |
-| M02 | Raw-text input adapter | `src/input_handler.py` | M01 | Text input becomes a validated source artifact |
-| M03 | PDF extraction adapter | `src/pdf_processor.py` | M01 | PDF input becomes ordered page text plus metadata |
-| M04 | Preprocessing | `src/preprocessing.py` | M02 or M03 | Raw text remains preserved; cleaned text is separate |
-| M05 | Segmentation and chunking | `src/segmentation.py`, `src/chunking.py` | M04 | Sentences/chunks have stable IDs and source mapping |
-| M06 | Candidate extraction | `src/keyword_extractor.py` | M05 | Returns the fixed candidate dictionary shape |
-| M07 | Candidate ranking | `src/ranking.py` | M06 | Returns ranked candidates without changing candidate schema |
-| M08 | Representations and similarity | `src/embeddings.py` | M05, M07 | TF-IDF and semantic utilities are independently testable |
-| M09 | Question generation | `src/question_generator.py` | M05, M07, M08 | Returns traceable generation records; backend is explicit |
-| M10 | Question validation | `src/validator.py` | M09, M08 | Returns validity plus detailed reasons |
-| M11 | Distractor generation | `src/distractor_generator.py` | M07, M08, M10 | Returns candidates, scores, selected options, and rejection reasons |
-| M12 | MCQ assembly and validation | `src/mcq_validator.py` | M10, M11 | Rejects critical failures and returns validated MCQs only |
-| M13 | Pipeline orchestration | `src/pipeline.py` | M02–M12 | Connects modules without owning their internal algorithms |
-| M14 | Evaluation | `evaluation/` | M13 | Reports measured results without changing generation behavior |
-| M15 | Streamlit integration | `app.py`, `ui/` | M01, M13 | UI consumes the result contract; no NLP logic in the UI |
-| M16 | Quiz mode hardening | UI quiz state/tests | M15, M13 | Quiz operates only on validated MCQs |
-| M17 | Documentation and release | README, report, reproducibility records | M13–M16 | Setup, tests, limitations, and known gaps are current |
-| M18 | SQuADv2 preparation | `training/prepare_squad.py` | M00 | Answerable context-answer-question JSONL |
-| M19 | Local QG fine-tuning | `training/train_qg.py` | M18 | Locally saved FLAN-T5 checkpoint and tokenizer |
-| M20 | Trained-checkpoint integration | `src/question_generator.py`, config | M09, M19 | Inference uses the recorded local checkpoint |
+**Status legend:** `[ ]` not started · `[~]` partial/in progress · `[x]` implemented
+and verified · `[!]` blocked. Dataset/model tasks stay unchecked until their
+artifacts are supplied and the required local run is completed. A checked
+shell task can still have an unchecked integration dependency; the row's
+handoff contract states exactly what is available now.
+
+| Done | ID | Implementable task | Owns | Depends on | Safe handoff contract |
+|---|---|---|---|---|---|
+| [ ] | M00 | Repository scaffolding | `src/__init__.py`, config, dependencies, test layout | None | Imports work; tests can run |
+| [ ] | M01 | Pipeline result contract | schema tests and typed/documented result shape | M00 | `generate_mcqs(...)` returns all required top-level keys |
+| [ ] | M02 | Raw-text input adapter | `src/input_handler.py` | M01 | Text input becomes a validated source artifact |
+| [ ] | M03 | PDF extraction adapter | `src/pdf_processor.py` | M01 | PDF input becomes ordered page text plus metadata |
+| [ ] | M04 | Preprocessing | `src/preprocessing.py` | M02 or M03 | Raw text remains preserved; cleaned text is separate |
+| [ ] | M05 | Segmentation and chunking | `src/segmentation.py`, `src/chunking.py` | M04 | Sentences/chunks have stable IDs and source mapping |
+| [ ] | M06 | Candidate extraction | `src/keyword_extractor.py` | M05 | Returns the fixed candidate dictionary shape |
+| [ ] | M07 | Candidate ranking | `src/ranking.py` | M06 | Returns ranked candidates without changing candidate schema |
+| [ ] | M08 | Representations and similarity | `src/embeddings.py` | M05, M07 | TF-IDF and semantic utilities are independently testable |
+| [ ] | M09 | Question generation | `src/question_generator.py` | M05, M07, M08 | Returns traceable generation records; backend is explicit |
+| [ ] | M10 | Question validation | `src/validator.py` | M09, M08 | Returns validity plus detailed reasons |
+| [ ] | M11 | Distractor generation | `src/distractor_generator.py` | M07, M08, M10 | Returns candidates, scores, selected options, and rejection reasons |
+| [ ] | M12 | MCQ assembly and validation | `src/mcq_validator.py` | M10, M11 | Rejects critical failures and returns validated MCQs only |
+| [ ] | M13 | Pipeline orchestration | `src/pipeline.py` | M02–M12 | Connects modules without owning their internal algorithms |
+| [ ] | M14 | Evaluation | `evaluation/` | M13 | Reports measured results without changing generation behavior |
+| [x] | M15 | Streamlit integration shell | `app.py`, `ui/` | M01, M13 | UI shell consumes the result contract when available; no NLP logic in the UI |
+| [x] | M16 | Quiz mode shell | UI quiz state/tests | M15, M13 | Quiz operates on validated MCQs when the pipeline returns them |
+| [ ] | M17 | Documentation and release | README, report, reproducibility records | M13–M16 | Setup, tests, limitations, and known gaps are current |
+| [ ] | M18 | SQuADv2 preparation | `training/prepare_squad.py` | M00 | Answerable context-answer-question JSONL |
+| [ ] | M19 | Local QG fine-tuning | `training/train_qg.py` | M18 | Locally saved FLAN-T5 checkpoint and tokenizer |
+| [ ] | M20 | Trained-checkpoint integration | `src/question_generator.py`, config | M09, M19 | Inference uses the recorded local checkpoint |
 
 #### Safe task rules
 
