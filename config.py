@@ -15,6 +15,19 @@ CONFIG = {
     "semantic_embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
     "min_input_characters": 120,
     "max_questions": 20,
+    "chunk_size_sentences": 8,
+    "chunk_overlap_sentences": 2,
+    "min_candidate_chars": 3,
+    "max_candidate_words": 6,
+    "max_candidate_overlap": 0.6,
+    "ranking_weights": {
+        "tfidf_score": 0.35,
+        "rake_score": 0.20,
+        "frequency": 0.15,
+        "is_noun_phrase": 0.10,
+        "is_named_entity": 0.10,
+        "position": 0.10,
+    },
 }
 
 QUESTION_MODELS = ("google/flan-t5-base", "google/flan-t5-small")

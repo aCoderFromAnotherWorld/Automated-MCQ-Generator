@@ -1,5 +1,6 @@
 streamlit>=1.38,<2.0
 pypdf>=5.0,<6.0
+spacy>=3.7,<4.0
 torch>=2.2,<3.0
 transformers>=4.45,<5.0
 datasets>=2.20,<4.0
