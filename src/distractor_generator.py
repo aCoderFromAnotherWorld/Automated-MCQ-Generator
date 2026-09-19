@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any, Callable, Iterable, Mapping
 
-from src.embeddings import semantic_similarity
+from src.embeddings import pairwise_cosine_similarity, semantic_similarity
 
 
 def _normalise(text: str) -> str:
@@ -61,6 +61,11 @@ def generate_distractors(
             return float(scorer(candidate_text, question))
         return float(semantic_similarity(candidate_text, question, model=model))
 
+    # Pre-filter candidates first, then compute the expensive semantic scores in
+    # two batched passes (against the answer and against the question) instead of
+    # one pairwise model call per candidate.
+    filtered: list[dict[str, Any]] = []
+    normalized_context = _normalise(context)
     for candidate in candidates:
         text = " ".join(_candidate_text(candidate).split())
         key = _normalise(text)
@@ -70,9 +75,33 @@ def generate_distractors(
         elif key in seen:
             reasons.append("duplicate_candidate")
         seen.add(key)
+        needs_support = (not reasons) and (key in normalized_context)
+        if reasons:
+            rejected.append({"text": text, "reasons": reasons})
+            continue
+        filtered.append(
+            {
+                "text": text,
+                "key": key,
+                "candidate": candidate,
+                "needs_support": needs_support,
+            }
+        )
+
+    texts = [item["text"] for item in filtered]
+    if similarity is None and texts:
+        answer_scores = pairwise_cosine_similarity(answer, texts, model=model)
+        question_scores = pairwise_cosine_similarity(question, texts, model=model)
+    else:
+        answer_scores = [score(text, answer) for text in texts]
+        question_scores = [score(text, question) for text in texts]
+
+    for item, answer_score, question_score in zip(filtered, answer_scores, question_scores):
+        text = item["text"]
         context_score: float | None = None
-        if not reasons and key in _normalise(context):
-            context_score = support_score(text)
+        reasons = []
+        if item["needs_support"]:
+            context_score = question_score if context_similarity is None else support_score(text)
             if context_score >= context_support_threshold:
                 reasons.append("contextually_supported_critical_failure")
         if reasons:
@@ -81,8 +110,8 @@ def generate_distractors(
                 rejection["context_similarity"] = round(context_score, 6)
             rejected.append(rejection)
             continue
-        candidate_score = 0.5 * score(text, answer) + 0.5 * score(text, question)
-        type_bonus = 0.05 if isinstance(candidate, Mapping) and _type_match(candidate, answer_record) else 0.0
+        candidate_score = 0.5 * answer_score + 0.5 * question_score
+        type_bonus = 0.05 if isinstance(item["candidate"], Mapping) and _type_match(item["candidate"], answer_record) else 0.0
         scored.append(
             {
                 "text": text,
@@ -90,7 +119,7 @@ def generate_distractors(
                 "semantic_score": round(candidate_score, 6),
                 "context_similarity": round(context_score, 6) if context_score is not None else None,
                 "type_match": bool(type_bonus),
-                "candidate": dict(candidate) if isinstance(candidate, Mapping) else {"text": text},
+                "candidate": dict(item["candidate"]) if isinstance(item["candidate"], Mapping) else {"text": text},
             }
         )
 

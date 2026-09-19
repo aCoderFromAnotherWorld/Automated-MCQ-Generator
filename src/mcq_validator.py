@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any, Callable, Iterable, Mapping
 
-from src.embeddings import semantic_similarity
+from src.embeddings import pairwise_cosine_similarity
 from src.validator import validate_question
 
 
@@ -29,14 +29,16 @@ def _semantic_duplicate(
     threshold: float,
 ) -> tuple[bool, float | None]:
     normalized = _normalise(question)
-    for previous in previous_questions:
-        previous_text = _clean(previous)
-        if normalized and normalized == _normalise(previous_text):
-            return True, 1.0
-        if similarity is not None:
-            score = float(similarity(question, previous_text))
-        else:
-            score = semantic_similarity(question, previous_text)
+    previous_texts = [_clean(previous) for previous in previous_questions]
+    if normalized and any(normalized == _normalise(previous_text) for previous_text in previous_texts):
+        return True, 1.0
+    if not previous_texts:
+        return False, None
+    if similarity is not None:
+        scores = [float(similarity(question, previous_text)) for previous_text in previous_texts]
+    else:
+        scores = pairwise_cosine_similarity(question, previous_texts)
+    for score in scores:
         if score >= threshold:
             return True, score
     return False, None

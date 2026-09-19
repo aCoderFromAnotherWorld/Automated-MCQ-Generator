@@ -8,7 +8,7 @@ from typing import Any, Callable, Mapping
 from config import CONFIG
 from src.contracts import assert_json_serializable, ensure_result_shape
 from src.distractor_generator import generate_distractors
-from src.embeddings import add_tfidf_scores, semantic_similarity
+from src.embeddings import add_tfidf_scores
 from src.input_handler import text_to_result
 from src.keyword_extractor import extract_candidates
 from src.mcq_validator import assemble_mcq
@@ -77,13 +77,9 @@ def generate_mcqs(
     if config is not None:
         run_config.update(dict(config))
     run_config.update(options)
-    similarity_fn = similarity or (
-        lambda left, right: semantic_similarity(
-            left,
-            right,
-            model_name=str(run_config.get("semantic_embedding_model", CONFIG["semantic_embedding_model"])),
-        )
-    )
+    similarity_fn = similarity
+    max_attempts = num_questions * int(run_config.get("generation_attempt_factor", 3))
+    distractor_pool_size = int(run_config.get("max_distractor_pool", 12))
     result = text_to_result(text, run_config)
     result = preprocess_result(result)
     result = chunk_result(result, run_config)
@@ -109,6 +105,8 @@ def generate_mcqs(
     for candidate in result["ranked_candidates"]:
         if len(questions) >= num_questions:
             break
+        if len(generation_records) >= max_attempts:
+            break
         chunk = _chunk_for_candidate(candidate, result["chunks"])
         if chunk is None:
             validation_records.append({"valid": False, "reasons": ["missing_source_chunk"], "candidate": dict(candidate)})
@@ -127,7 +125,7 @@ def generate_mcqs(
             question,
             answer,
             context,
-            result["ranked_candidates"],
+            result["ranked_candidates"][:distractor_pool_size],
             answer_record=candidate,
             similarity=similarity_fn,
         )

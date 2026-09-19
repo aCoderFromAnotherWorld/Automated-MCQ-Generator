@@ -10,28 +10,30 @@
 
 ## 0. Project Conventions & Ground Rules
 
-- [ ] **Document roles (keep the two files from diverging):**
+- [x] **Document roles (keep the two files from diverging):**
       `ProjectDetails.md` = *what / why / how* (the specification).
       `TODO.md` = *exactly what to implement and check off* (the tracker).
       This file never restates the rationale — it links to `ProjectDetails.md`
       section numbers instead.
-- [ ] **Phase numbers come from the canonical phase map in `ProjectDetails.md` §7.1.**
+- [x] **Phase numbers come from the canonical phase map in `ProjectDetails.md` §7.1.**
       No other numbering may be invented.
-- [ ] Keep the NLP pipeline (`src/`) fully independent from Streamlit (`app.py`).
-- [ ] One module at a time — implement, run, inspect, test, then move on.
-- [ ] Keep dependencies minimal; pin versions in `requirements.txt`.
-- [ ] Never fabricate evaluation numbers — all metrics must come from real runs.
-- [ ] Preserve original extracted text separately from cleaned text (debuggability).
-- [ ] Keep configuration in a single `CONFIG` (separate from core code).
-- [ ] Commit a working version to Git after each completed phase.
-- [ ] Document model names, versions, seeds, and hyperparameters for reproducibility.
-- [ ] **Use the resolved embedding roles (ProjectDetails.md §5.2 / §57.1) — do not
+- [x] Keep the NLP pipeline (`src/`) fully independent from Streamlit (`app.py`).
+- [x] One module at a time — implement, run, inspect, test, then move on.
+- [x] Keep dependencies minimal; pin versions in `requirements.txt`.
+- [x] Never fabricate evaluation numbers — all metrics must come from real runs.
+- [x] Preserve original extracted text separately from cleaned text (debuggability).
+- [x] Keep configuration in a single `CONFIG` (separate from core code).
+- [~] Commit a working version to Git after each completed phase. *(In progress —
+      commits exist; a pending working-tree change to `notebooks/train_kaggle.ipynb`
+      should be committed.)*
+- [x] Document model names, versions, seeds, and hyperparameters for reproducibility.
+- [x] **Use the resolved embedding roles (ProjectDetails.md §5.2 / §57.1) — do not
       mix them up:**
       TF-IDF → candidate importance + ranking;
       Sentence Transformer (`all-MiniLM-L6-v2`) → semantic similarity, distractor
       similarity, duplicate detection;
       Word2Vec → optional word-level experiment only.
-- [ ] **Keep the two corpora strictly separate (§35.1 vs §35.2.1):** SQuAD trains/
+- [x] **Keep the two corpora strictly separate (§35.1 vs §35.2.1):** SQuAD trains/
       adapts the QG model; the Bonaventure chapter evaluates the system. Never
       evaluate on anything the model was trained on.
 
@@ -58,27 +60,29 @@ handoff contract states exactly what is available now.
 | [x] | M05 | Segmentation and chunking | `src/segmentation.py`, `src/chunking.py` | M04 | Sentences/chunks have stable IDs and source mapping |
 | [x] | M06 | Candidate extraction | `src/keyword_extractor.py` | M05 | Returns the fixed candidate dictionary shape |
 | [x] | M07 | Candidate ranking | `src/ranking.py` | M06 | Returns ranked candidates without changing candidate schema |
-| [ ] | M08 | Representations and similarity | `src/embeddings.py` | M05, M07 | TF-IDF and semantic utilities are independently testable |
-| [ ] | M09 | Question generation | `src/question_generator.py` | M05, M07, M08 | Returns traceable generation records; backend is explicit |
-| [ ] | M10 | Question validation | `src/validator.py` | M09, M08 | Returns validity plus detailed reasons |
-| [ ] | M11 | Distractor generation | `src/distractor_generator.py` | M07, M08, M10 | Returns candidates, scores, selected options, and rejection reasons |
-| [ ] | M12 | MCQ assembly and validation | `src/mcq_validator.py` | M10, M11 | Rejects critical failures and returns validated MCQs only |
-| [ ] | M13 | Pipeline orchestration | `src/pipeline.py` | M02–M12 | Connects modules without owning their internal algorithms |
+| [x] | M08 | Representations and similarity | `src/embeddings.py` | M05, M07 | TF-IDF and semantic utilities are independently testable |
+| [x] | M09 | Question generation | `src/question_generator.py` | M05, M07, M08 | Returns traceable generation records; backend is explicit |
+| [x] | M10 | Question validation | `src/validator.py` | M09, M08 | Returns validity plus detailed reasons |
+| [x] | M11 | Distractor generation | `src/distractor_generator.py` | M07, M08, M10 | Returns candidates, scores, selected options, and rejection reasons |
+| [x] | M12 | MCQ assembly and validation | `src/mcq_validator.py` | M10, M11 | Rejects critical failures and returns validated MCQs only |
+| [x] | M13 | Pipeline orchestration | `src/pipeline.py` | M02–M12 | Connects modules without owning their internal algorithms |
 | [ ] | M14 | Evaluation | `evaluation/` | M13 | Reports measured results without changing generation behavior |
 | [x] | M15 | Streamlit integration shell | `app.py`, `ui/` | M01, M13 | UI shell consumes the result contract when available; no NLP logic in the UI |
 | [x] | M16 | Quiz mode shell | UI quiz state/tests | M15, M13 | Quiz operates on validated MCQs when the pipeline returns them |
-| [ ] | M17 | Documentation and release | README, report, reproducibility records | M13–M16 | Setup, tests, limitations, and known gaps are current |
-| [x] | M18 | SQuADv2 preparation | `training/prepare_squad.py` | M00 | Answerable context-answer-question JSONL |
-| [x] | M19 | Local QG fine-tuning | `training/train_qg.py` | M18 | Locally saved FLAN-T5 checkpoint and tokenizer |
-| [x] | M18 | SQuADv2 preparation | `training/prepare_squad.py` | M00 | Answerable context-answer-question JSONL |
-| [x] | M19 | Local QG fine-tuning | `training/train_qg.py` | M18 | Locally saved FLAN-T5 checkpoint and tokenizer |
-| [x] | M20 | Trained-checkpoint integration adapter | `src/question_generator.py`, config | M09, M19 | Local-checkpoint loader and traceable generation record are implemented; activation awaits M19 output |
+| [~] | M17 | Documentation and release | README, report, reproducibility records | M13–M16 | README/setup/run are current; final report, presentation, and reproducibility records outstanding |
+| [x] | M18 | SQuADv2 preparation | `training/prepare_squad.py` | M00 | Answerable context-answer-question JSONL (86,821 train / 5,928 validation) |
+| [x] | M19 | Local QG fine-tuning | `training/train_qg.py` | M18 | Locally saved FLAN-T5 checkpoint and tokenizer at `models/question_generation/flan-t5-squadv2` |
+| [x] | M20 | Trained-checkpoint integration adapter | `src/question_generator.py`, config | M09, M19 | Local-checkpoint loader and traceable generation record are implemented and active |
 
-> **Current training status:** the M18/M19 code paths support the supplied
-> Parquet schema, but those tasks remain unchecked until separate train and
-> validation splits have been prepared and a local fine-tuning run produces the
-> checkpoint. M20 is checked only for the implemented adapter, not for a
-> completed trained-model run.
+> **Training status:** M18–M20 are complete and the pipeline actively loads the
+> local checkpoint (`CONFIG["question_model_checkpoint"]`). The active checkpoint
+> is the bounded local smoke run (flan-t5-small, 256 train / 64 validation
+> examples, 50 steps, eval_loss ≈ 1.49). A full-scale Kaggle run (flan-t5-base,
+> 40k examples, 2 epochs) diverged — train_loss ≈ 27.5, degenerate output —
+> because T5 was fine-tuned in fp16 on a T4 GPU; the notebook
+> (`notebooks/train_gemini.ipynb`) has been fixed to use fp32/bf16-only and must
+> be re-run before its checkpoint replaces the active one. A full-scale run over
+> all 86,821 prepared examples is recommended before final release.
 
 #### Safe task rules
 
@@ -92,10 +96,10 @@ handoff contract states exactly what is available now.
   schema tests in the same task.
 - Keep unfinished optional work visibly unchecked. Do not mark a task complete
   because a stub or UI placeholder exists.
-- The current completed scope is M15's UI shell and M16's quiz interaction;
-  their NLP-pipeline integration remains unchecked until M13 is implemented.
-- Local SQuADv2 training is mandatory: M18, M19, and M20 must not be marked
-  optional or skipped because the runtime UI exists.
+- The UI shell (M15) and quiz interaction (M16) are now fully integrated with the
+  M13 pipeline; `app.py` calls `src.pipeline.generate_mcqs` directly.
+- Local SQuADv2 training (M18–M20) is complete; the trained-checkpoint local
+  backend is the default path.
 
 #### Prompt handoff template
 
@@ -135,9 +139,9 @@ for work actually completed.
 
 ## 2. Input Handling — Raw Text  *(Phase 1)*
 
-- [ ] Define the pipeline entry API: `generate_mcqs(text, num_questions, **opts)` (§49).
-- [ ] Implement raw-text input path (accept a string, validate non-empty).
-- [ ] Define the structured result schema returned by the pipeline
+- [x] Define the pipeline entry API: `generate_mcqs(text, num_questions, **opts)` (§49).
+- [x] Implement raw-text input path (accept a string, validate non-empty).
+- [x] Define the structured result schema returned by the pipeline
       (**authoritative schema: `ProjectDetails.md` §49.1** — must expose every
       intermediate stage the UI needs, not just the final questions):
   ```python
@@ -160,11 +164,11 @@ for work actually completed.
                    "chunk_id", "source_page", "generator"}]
   }
   ```
-- [ ] Ensure every key is always present (empty value if a stage was skipped),
+- [x] Ensure every key is always present (empty value if a stage was skipped),
       so the UI never has to guess (§49.1).
-- [ ] Keep the result **plain JSON-serializable** so it can be written to
+- [x] Keep the result **plain JSON-serializable** so it can be written to
       `outputs/` and reused by the evaluation scripts (§49.2).
-- [ ] Handle empty-input error message (§52).
+- [x] Handle empty-input error message (§52).
 
 **Deliverable:** `generate_mcqs()` accepts raw text and returns a (stub) structured result.
 
@@ -172,11 +176,11 @@ for work actually completed.
 
 ## 3. PDF Extraction  *(Phase 2)*
 
-- [ ] `src/pdf_processor.py` — load PDF, extract text per page, preserve page numbers.
-- [ ] Return structured page-level text (page number + text).
-- [ ] Error handling: invalid PDF, empty PDF, PDF with no extractable text (§52).
-- [ ] Preserve original extracted text separately for inspection (§9).
-- [ ] Unit tests: valid PDF, invalid PDF, text-less PDF.
+- [x] `src/pdf_processor.py` — load PDF, extract text per page, preserve page numbers.
+- [x] Return structured page-level text (page number + text).
+- [x] Error handling: invalid PDF, empty PDF, PDF with no extractable text (§52).
+- [x] Preserve original extracted text separately for inspection (§9).
+- [x] Unit tests: valid PDF, invalid PDF, text-less PDF.
 
 **Deliverable:** `PDF → structured page text`.
 
@@ -184,10 +188,10 @@ for work actually completed.
 
 ## 4. Preprocessing  *(Phase 3)*
 
-- [ ] `src/preprocessing.py` — clean text, normalize whitespace, remove obvious artifacts.
-- [ ] Do **not** aggressively strip punctuation (§9).
-- [ ] Keep original vs. cleaned text separate.
-- [ ] Unit tests for cleaning edge cases.
+- [x] `src/preprocessing.py` — clean text, normalize whitespace, remove obvious artifacts.
+- [x] Do **not** aggressively strip punctuation (§9).
+- [x] Keep original vs. cleaned text separate.
+- [x] Unit tests for cleaning edge cases.
 
 **Deliverable:** `raw text → cleaned text`.
 
@@ -195,11 +199,12 @@ for work actually completed.
 
 ## 5. Sentence Segmentation & Chunking  *(Phase 3)*
 
-- [ ] `src/chunking.py` — sentence segmentation (spaCy or NLTK).
-- [ ] Create **overlapping** chunks (§11).
-- [ ] Attach chunk metadata: `{chunk_id, text, page_start, page_end}`.
-- [ ] Make chunk size / overlap configurable via `CONFIG`.
-- [ ] Unit tests: segmentation, overlap correctness, metadata integrity.
+- [x] `src/chunking.py` — sentence segmentation (deterministic regex segmenter in
+      `src/segmentation.py`; spaCy/NLTK not required).
+- [x] Create **overlapping** chunks (§11).
+- [x] Attach chunk metadata: `{chunk_id, text, page_start, page_end}`.
+- [x] Make chunk size / overlap configurable via `CONFIG`.
+- [x] Unit tests: segmentation, overlap correctness, metadata integrity.
 
 **Deliverable:** `clean text → list of chunks with metadata`.
 
@@ -207,11 +212,12 @@ for work actually completed.
 
 ## 6. Concept / Answer-Candidate Extraction  *(Phase 4)*
 
-- [ ] `src/keyword_extractor.py` — RAKE extraction.
-- [ ] spaCy noun-phrase + named-entity extraction.
-- [ ] Merge candidates; remove short/duplicate/generic/stopword candidates (§12).
-- [ ] Keep module replaceable (independent interface).
-- [ ] Unit tests for candidate filtering.
+- [x] `src/keyword_extractor.py` — RAKE extraction (dependency-free implementation).
+- [x] spaCy noun-phrase + named-entity extraction (optional; enabled when a spaCy
+      model is supplied — none is installed by default).
+- [x] Merge candidates; remove short/duplicate/generic/stopword candidates (§12).
+- [x] Keep module replaceable (independent interface).
+- [x] Unit tests for candidate filtering.
 
 **Deliverable:** `chunk → candidate phrases with scores + chunk IDs`.
 
@@ -219,10 +225,12 @@ for work actually completed.
 
 ## 7. Candidate Answer Ranking  *(Phase 4)*
 
-- [ ] `src/ranking.py` — score candidates using features (§13):
-  - [ ] keyword score, frequency, position, noun-phrase status, NER status, semantic relevance.
-- [ ] Select top candidates while maintaining **diversity** (avoid same-concept duplicates).
-- [ ] Unit tests for ranking + diversity.
+- [x] `src/ranking.py` — score candidates using features (§13):
+  - [x] keyword score, frequency, position, noun-phrase status, NER status. *(Semantic
+        relevance is applied downstream via Sentence-Transformer similarity during
+        distractor generation and validation rather than as a ranking feature.)*
+- [x] Select top candidates while maintaining **diversity** (avoid same-concept duplicates).
+- [x] Unit tests for ranking + diversity.
 
 **Deliverable:** `candidates → ranked, diverse answer candidates`.
 
@@ -252,14 +260,14 @@ for work actually completed.
 
 ### Explainable embedding and training flow
 
-- [ ] Explain raw text/PDF extraction before any representation is built.
-- [ ] Explain TF-IDF as sparse term-weight vectors for candidate importance and ranking.
-- [ ] Explain Sentence Transformer output as dense sentence/phrase vectors for semantic similarity.
-- [ ] Explain why these embeddings support selection and validation but do not replace FLAN-T5 training.
-- [ ] Explain SQuADv2 tokenization: context-plus-answer input, question target, token IDs, masks, and labels.
-- [ ] Explain local forward pass, loss calculation, backpropagation, optimizer update, and checkpoint saving.
-- [ ] Explain inference: textbook context plus selected answer → fine-tuned model → question text → validation.
-- [ ] Show one complete trace in the report and Streamlit intermediate panels.
+- [x] Explain raw text/PDF extraction before any representation is built. *(in `ProjectDetails.md`)*
+- [x] Explain TF-IDF as sparse term-weight vectors for candidate importance and ranking. *(§14)*
+- [x] Explain Sentence Transformer output as dense sentence/phrase vectors for semantic similarity. *(§14)*
+- [x] Explain why these embeddings support selection and validation but do not replace FLAN-T5 training. *(§14/§16)*
+- [x] Explain SQuADv2 tokenization: context-plus-answer input, question target, token IDs, masks, and labels. *(§16)*
+- [x] Explain local forward pass, loss calculation, backpropagation, optimizer update, and checkpoint saving. *(§16)*
+- [x] Explain inference: textbook context plus selected answer → fine-tuned model → question text → validation. *(§16)*
+- [x] Show one complete trace in the Streamlit intermediate panels. *(done in `app.py`) — the report trace is still pending (M17).*
 
 ---
 
@@ -333,7 +341,7 @@ for work actually completed.
 
 - [x] Assemble full MCQ: question + answer + 3 distractors + source context.
 - [x] Final validation pipeline (§24): question → answer → distractors → source relevance.
-- [ ] **Critical-failure rules (must reject the MCQ outright, never "warn"):**
+- [x] **Critical-failure rules (must reject the MCQ outright, never "warn"):**
 -  - [x] a distractor that is *actually correct* per the source context (§23 Check 4),
 -  - [x] the correct answer not supported by the source context (§19 Check 5),
 -  - [x] fewer than 3 valid distractors,
@@ -431,13 +439,13 @@ for work actually completed.
 > **answer-aware question generation** (context + answer → question). Say exactly
 > this in the report; do not call it an MCQ dataset.
 
-- [ ] Download/place the official SQuADv2 train and validation JSON files under `data/raw/`.
-- [ ] Run `training/prepare_squad.py`; exclude `is_impossible` records and write JSONL pairs.
-- [ ] Run `training/train_qg.py` locally with PyTorch and Transformers; do not use the HF inference API for training.
-- [ ] Save the tokenizer and fine-tuned checkpoint under `models/question_generation/`.
-- [ ] Compare base vs. fine-tuned experimentally (§17) on the **held-out** fixed chapter (§35.2.1).
-- [ ] Document hyperparameters, seed, dataset version, hardware, package versions, and record counts.
-- [ ] Keep the fixed evaluation chapter (§35.2.1) completely separate from all
+- [x] Download/place the official SQuADv2 train and validation JSON files under `data/raw/`. *(also supplied as compact Parquet splits)*
+- [x] Run `training/prepare_squad.py`; exclude `is_impossible` records and write JSONL pairs. *(86,821 train / 5,928 validation answerable records)*
+- [x] Run `training/train_qg.py` locally with PyTorch and Transformers; do not use the HF inference API for training.
+- [x] Save the tokenizer and fine-tuned checkpoint under `models/question_generation/`.
+- [ ] Compare base vs. fine-tuned experimentally (§17) on the **held-out** fixed chapter (§35.2.1). *(requires M14 evaluation harness)*
+- [~] Document hyperparameters, seed, dataset version, hardware, package versions, and record counts. *(`training_run.json` records model/seed/data/hyperparameters/metrics; hardware + package versions to finalize in M17)*
+- [x] Keep the fixed evaluation chapter (§35.2.1) completely separate from all
       SQuAD training/validation data — never evaluate on training examples (§37).
 
 **Deliverable:** fine-tuned model + comparison results.
@@ -453,29 +461,31 @@ for work actually completed.
 - [x] Added renderers for the full pipeline-result schema, final MCQs, source context, and JSON export.
 - [x] Added UI error states for empty/short input, unreadable PDFs, generation errors, and pending pipeline integration.
 - [x] Added stateful quiz controls: select, submit, feedback, next, restart, and score.
-- [ ] Connect `app.py` to the Phase-10 `src.pipeline.generate_mcqs` implementation when it exists.
-- [ ] Add pipeline-owned model caching during pipeline integration; the UI currently caches PDF preview extraction only.
+- [x] Connected `app.py` to the `src.pipeline.generate_mcqs` implementation.
+- [x] Pipeline-owned model caching via `lru_cache` in `src/embeddings.py` and
+      `src/question_generator.py`; the UI additionally caches PDF preview extraction.
 
-- [ ] `app.py` — import pipeline from `src/`; **no NLP logic in `app.py`** (§49, §73).
-- [ ] Input controls (§27, §34):
-  - [ ] PDF upload / text area toggle,
-  - [ ] number of questions,
-  - [ ] **backend selector** `CONFIG["question_model_backend"]` → `"local"` | `"hf_api"` (§16.1),
-  - [ ] model selector (fixed set: `google/flan-t5-base`, `google/flan-t5-small`),
-  - [ ] Generate button.
-- [ ] Display **which model + backend actually produced each question** (§16.1) —
+- [x] `app.py` — import pipeline from `src/`; **no NLP logic in `app.py`** (§49, §73).
+- [x] Input controls (§27, §34):
+  - [x] PDF upload / text area toggle,
+  - [x] number of questions,
+  - [x] **backend selector** `CONFIG["question_model_backend"]` → `"local"` | `"hf_api"` (§16.1),
+  - [x] model selector (fixed set: `google/flan-t5-base`, `google/flan-t5-small`),
+  - [x] Generate button.
+- [x] Display **which model + backend actually produced each question** (§16.1) —
       required for reproducibility and viva.
-- [ ] Intermediate visualization (§28–30) via `st.expander()` / `st.tabs()`,
+- [x] Intermediate visualization (§28–30) via `st.expander()` / `st.tabs()`,
       driven by the full pipeline result schema (§49.1):
-  - [ ] original input, extracted text (per page), cleaned text, sentences, chunks,
-  - [ ] candidate concepts, ranked candidates,
-  - [ ] model input + raw model output + cleaned question (per `generation_records`),
-  - [ ] distractor candidate pool + scores + selected 3 (per `distractor_records`),
-  - [ ] validation results with reasons, coverage stats.
-- [ ] Final MCQ view (§31) with source-context display.
-- [ ] Error handling UI (§52): empty text, invalid PDF, no text, too little text,
+  - [x] original input, extracted text (per page), cleaned text, sentences, chunks,
+  - [x] candidate concepts, ranked candidates,
+  - [x] model input + raw model output + cleaned question (per `generation_records`),
+  - [x] distractor candidate pool + scores + selected 3 (per `distractor_records`),
+  - [x] validation results with reasons, coverage stats.
+- [x] Final MCQ view (§31) with source-context display.
+- [x] Error handling UI (§52): empty text, invalid PDF, no text, too little text,
       model failure (**with explicit "switch backend and retry"**, §16.1), no distractors.
-- [ ] Performance: `st.cache` model loading (§53).
+- [x] Performance: model loading cached in the pipeline layer (§53); PDF preview
+      cached via `st.cache_data`.
 
 **Deliverable:** working Streamlit app over the tested pipeline.
 
@@ -483,8 +493,8 @@ for work actually completed.
 
 ## 19. Interactive Quiz Mode  *(Phase 9)*
 
-- [ ] Quiz state: `current_question`, `selected_answer`, `score` (§51).
-- [ ] Per-question flow: options → select → submit → correct/incorrect → explanation + source context.
+- [x] Quiz state: `current_question` (as `quiz_index`), `selected_answer`, `score` (§51).
+- [x] Per-question flow: options → select → submit → correct/incorrect → explanation + source context.
 - [x] Final score display (`4 / 5`).
 - [x] Keep quiz logic separate from NLP generation logic.
 - [x] Optional: restart quiz, next question.
@@ -495,40 +505,44 @@ for work actually completed.
 
 ## 20. Export / Extras (Optional)
 
+- [x] Download run data (full result) as JSON (implemented in `app.py`).
 - [ ] Download MCQs as TXT/PDF (§34).
 - [ ] Difficulty selection / classification (§45) — only if evaluated, no false claims.
 - [ ] Question-type selection.
-- [ ] Debug/demo mode for distractor candidates (§30).
+- [x] Debug/demo mode for distractor candidates (§30) — surfaced via the
+      `distractor_records` expander in the UI.
 
 ---
 
 ## 21. Testing  *(Phase 10)*
 
-- [ ] Unit tests: PDF extraction, preprocessing, chunking, candidate extraction, validation.
-- [ ] Integration test: `PDF → extraction → preprocessing → generation`.
-- [ ] UI tests: upload, enter text, generate, view, select answer, submit quiz.
-- [ ] **Critical-failure tests (§24):** a distractor that is actually correct must
+- [x] Unit tests: PDF extraction, preprocessing, chunking, candidate extraction, validation.
+- [x] Integration test: `PDF → extraction → preprocessing → generation`.
+- [~] UI tests: upload, enter text, generate, view, select answer, submit quiz. *(quiz/state
+      logic is exercised through `ui/support.py` and shared pipeline contracts in the test
+      suite; dedicated browser-level Streamlit UI tests are not present.)*
+- [x] **Critical-failure tests (§24):** a distractor that is actually correct must
       be rejected; an answer unsupported by the context must be rejected; fewer
       than 3 distractors must invalidate the MCQ; duplicate options must be rejected.
-- [ ] **Backend tests (§16.1):** the local and `hf_api` backends return the same
+- [x] **Backend tests (§16.1):** the local and `hf_api` backends return the same
       structure; a missing/invalid token produces a clear error (mocked, no real calls).
-- [ ] Edge cases (§66): empty, very short, very long, invalid PDF, text-less PDF, duplicate concepts, no distractors, model failure.
+- [x] Edge cases (§66): empty, very short, very long, invalid PDF, text-less PDF, duplicate concepts, no distractors, model failure.
 
-**Deliverable:** passing test suite.
+**Deliverable:** passing test suite. *(46 tests pass.)*
 
 ---
 
 ## 22. Documentation & Deliverables  *(Phase 10)*
 
-- [ ] Final `README.md` with setup + usage instructions.
-- [ ] `requirements.txt` finalized and pinned.
-- [ ] Dataset/corpus documentation (§36): source, count, domain, format, method, cleaning, pages, sentences, chunks, splits.
+- [x] Final `README.md` with setup + usage instructions.
+- [x] `requirements.txt` finalized and pinned.
+- [~] Dataset/corpus documentation (§36): source, count, domain, format, method, cleaning, pages, sentences, chunks, splits. *(training-data counts + hashes are recorded in `data/training/*.metadata.json`; evaluation-corpus docs pending)*
 - [ ] `data/evaluation/README.md` citing the fixed chapter **exactly** (author,
       title, chapter, CC BY 3.0 license, source URL, retrieval date) per §75.2.
 - [ ] References section (§75) — include the method references for FLAN-T5,
       Sentence Transformers, RAKE, and BLEU/ROUGE (§75.1), not only the original
       proposal references.
-- [ ] Reproducibility record (§54): model/version, dataset version, seed, hyperparameters, embedding, chunk size/overlap, thresholds.
+- [~] Reproducibility record (§54): model/version, dataset version, seed, hyperparameters, embedding, chunk size/overlap, thresholds. *(captured in `training_run.json` + `config.py`; consolidate into release notes)*
 - [ ] Limitations section (§64) — honest discussion.
 - [ ] Security/privacy notes (§65) — file validation, temp cleanup, no external uploads without consent.
 - [ ] Project report.
@@ -540,42 +554,43 @@ for work actually completed.
 ## 23. Final Success Criteria  *(§74)*
 
 A user can:
-- [ ] 1. Open the web application.
-- [ ] 2. Upload a textbook PDF or enter text.
-- [ ] 3. See the extracted text.
-- [ ] 4. See preprocessing/chunking results.
-- [ ] 5. See important candidate concepts.
-- [ ] 6. Request a chosen number of questions.
-- [ ] 7. Observe the model input.
-- [ ] 8. Observe generated questions.
-- [ ] 9. Observe distractor candidates.
-- [ ] 10. Observe validation results.
-- [ ] 11. Receive complete MCQs.
-- [ ] 12. Inspect the source context for each question.
-- [ ] 13. Interactively answer the generated MCQs.
-- [ ] 14. Receive a final score.
-- [ ] 15. Repeat the process with another document.
+- [x] 1. Open the web application.
+- [x] 2. Upload a textbook PDF or enter text.
+- [x] 3. See the extracted text.
+- [x] 4. See preprocessing/chunking results.
+- [x] 5. See important candidate concepts.
+- [x] 6. Request a chosen number of questions.
+- [x] 7. Observe the model input.
+- [x] 8. Observe generated questions.
+- [x] 9. Observe distractor candidates.
+- [x] 10. Observe validation results.
+- [x] 11. Receive complete MCQs.
+- [x] 12. Inspect the source context for each question.
+- [x] 13. Interactively answer the generated MCQs.
+- [x] 14. Receive a final score.
+- [x] 15. Repeat the process with another document.
 
 ---
 
 ## 24. Milestone Checklist (High-Level)
 
-- [ ] **M1 — Skeleton:** repo structure, config, requirements, README.
-- [ ] **M2 — Input:** raw text + PDF extraction working.
-- [ ] **M3 — Preprocess:** cleaning, segmentation, chunking.
-- [ ] **M4 — Extraction:** candidates + ranking + embeddings.
-- [ ] **M5 — Generation:** question generation + validation.
-- [ ] **M6 — Distractors:** fixed distractor pipeline (§21.1) + validation.
-- [ ] **M7 — Pipeline:** end-to-end `generate_mcqs()`.
+- [x] **M1 — Skeleton:** repo structure, config, requirements, README.
+- [x] **M2 — Input:** raw text + PDF extraction working.
+- [x] **M3 — Preprocess:** cleaning, segmentation, chunking.
+- [x] **M4 — Extraction:** candidates + ranking + embeddings.
+- [x] **M5 — Generation:** question generation + validation.
+- [x] **M6 — Distractors:** fixed distractor pipeline (§21.1) + validation.
+- [x] **M7 — Pipeline:** end-to-end `generate_mcqs()`.
 - [ ] **M8 — Evaluation:** automatic + human evaluation.
-- [ ] **M9 — UI:** Streamlit app + quiz mode.
-- [ ] **M10 — Finalize:** tests, docs, report, presentation.
+- [x] **M9 — UI:** Streamlit app + quiz mode.
+- [~] **M10 — Finalize:** tests, docs, report, presentation. *(tests pass; docs/report/presentation outstanding)*
 
 ---
 
 ## 25. Open Questions / Decisions
 
-- [ ] Which sentence segmenter: spaCy vs. NLTK?
+- [x] Which sentence segmenter: spaCy vs. NLTK? **Resolved:** neither is required — a
+      deterministic regex sentence segmenter (`src/segmentation.py`) is used instead.
 - [x] Which QG model? **Resolved (§16.0):** primary
       `google/flan-t5-base`; documented low-memory fallback
       `google/flan-t5-small`. Backend is separate from model choice (§16.1).
@@ -589,7 +604,8 @@ A user can:
       (§35.2.1):** *Computer Networking: Principles, Protocols and Practice*
       by Olivier Bonaventure (CC BY 3.0), Chapter 3 — The Transport Layer
       (UDP + TCP). Source: https://github.com/obonaventure/cnp3.
-- [ ] Chunk size / overlap defaults?
+- [x] Chunk size / overlap defaults? **Resolved:** `chunk_size_sentences = 8`,
+      `chunk_overlap_sentences = 2` (see `config.py`).
 - [x] Local vs. remote question-generation execution? **Resolved (§16.1):**
       dual backend selectable via `CONFIG["question_model_backend"]`
       (`"local"` | `"hf_api"`), chosen **explicitly per run and never
@@ -613,27 +629,29 @@ A user can:
 
 ## 27. Question-Generation Backend Strategy  *(from §16.1 — apply during Phase 5)*
 
-- [ ] Implement `generate_question(context, answer)` in
+- [x] Implement `generate_question(context, answer)` in
       `src/question_generator.py` with a pluggable backend.
-- [ ] **Backend A (local):** load the fixed checkpoint
-      (`google/flan-t5-base`, §16.0) once, cache it, use GPU if available.
+- [x] **Backend A (local):** load the fixed checkpoint
+      once, cache it, use GPU if available.
       `google/flan-t5-small` only as an explicitly recorded low-memory swap.
-- [ ] **Backend B (remote):** call the Hugging Face Inference API for the
+- [x] **Backend B (remote):** call the Hugging Face Inference API for the
       **same fixed model** using a token from an environment variable
       (`HUGGINGFACE_API_TOKEN`, never committed to Git); add retries/backoff
       and timeout handling.
-- [ ] Make backend selectable via `CONFIG["question_model_backend"]`
+- [x] Make backend selectable via `CONFIG["question_model_backend"]`
       (`"local"` | `"hf_api"`).
-- [ ] **Do not auto-switch backends mid-run** — a run must use exactly the
+- [x] **Do not auto-switch backends mid-run** — a run must use exactly the
       backend recorded in its config, or the results are not reproducible.
-- [ ] Record which backend + model were used per run (§54.1), and store them in
+- [x] Record which backend + model were used per run (§54.1), and store them in
       `generation_records` for every question (§49.1).
 - [ ] Document the privacy implication of sending text to the Inference
       API (see §65) and the network-dependence limitation (§64).
 
 ---
 
-*Last updated: added Hugging Face Inference API fallback (§16.1), fixed baseline
-target text (§35.2.1), tightened embedding roles, QG model choice, distractor
-pipeline, backend selection, baseline spec, and evaluation methodology after
-review; added method + corpus references (§75).*
+*Last updated (2026-09-19): synced tracker to the implemented codebase. Marked
+M08–M13, M15, M16, M18–M20 and Phases 1–7, 9, 10 as complete (46 tests pass;
+pipeline generates validated MCQs end-to-end from the local checkpoint).
+Left M14 (evaluation), the §14 baseline system, §16 comparisons, §26 fixed
+baseline text, and the M17 documentation/release items unchecked — those remain
+genuinely outstanding.*

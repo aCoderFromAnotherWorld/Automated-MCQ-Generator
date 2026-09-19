@@ -16,10 +16,12 @@ env/
 .ipynb_checkpoints/
 
 # # Generated outputs
-# outputs/
+outputs/
 
 # # Model files
-# models/
+models/
+models/**
+
 **/optimizer.pt
 
 # OS

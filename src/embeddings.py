@@ -123,3 +123,24 @@ def semantic_similarity(
 
     vectors = encode([left, right], model=model, model_name=model_name)
     return cosine_similarity(vectors[0], vectors[1])
+
+
+def pairwise_cosine_similarity(
+    left: str,
+    rights: Sequence[str],
+    *,
+    model: Any | None = None,
+    model_name: str = "sentence-transformers/all-MiniLM-L6-v2",
+) -> list[float]:
+    """Return cosine similarity of ``left`` to every text in ``rights``.
+
+    All texts are encoded in a single batched ``encode`` call, which is far
+    faster than calling :func:`semantic_similarity` once per pair on CPU.
+    """
+
+    right_list = [str(value) for value in rights]
+    if not right_list:
+        return []
+    vectors = encode([left, *right_list], model=model, model_name=model_name)
+    left_vector = vectors[0]
+    return [cosine_similarity(left_vector, vectors[index + 1]) for index in range(len(right_list))]

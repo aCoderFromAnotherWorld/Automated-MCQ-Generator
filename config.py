@@ -25,6 +25,10 @@ CONFIG = {
     "min_candidate_chars": 3,
     "max_candidate_words": 6,
     "max_candidate_overlap": 0.6,
+    # Performance caps: bound the per-question distractor pool and the number of
+    # generation attempts so a single run stays fast on CPU.
+    "max_distractor_pool": 12,
+    "generation_attempt_factor": 3,
     "ranking_weights": {
         "tfidf_score": 0.35,
         "rake_score": 0.20,
