@@ -70,6 +70,8 @@ handoff contract states exactly what is available now.
 | [ ] | M17 | Documentation and release | README, report, reproducibility records | M13–M16 | Setup, tests, limitations, and known gaps are current |
 | [x] | M18 | SQuADv2 preparation | `training/prepare_squad.py` | M00 | Answerable context-answer-question JSONL |
 | [x] | M19 | Local QG fine-tuning | `training/train_qg.py` | M18 | Locally saved FLAN-T5 checkpoint and tokenizer |
+| [x] | M18 | SQuADv2 preparation | `training/prepare_squad.py` | M00 | Answerable context-answer-question JSONL |
+| [x] | M19 | Local QG fine-tuning | `training/train_qg.py` | M18 | Locally saved FLAN-T5 checkpoint and tokenizer |
 | [x] | M20 | Trained-checkpoint integration adapter | `src/question_generator.py`, config | M09, M19 | Local-checkpoint loader and traceable generation record are implemented; activation awaits M19 output |
 
 > **Current training status:** the M18/M19 code paths support the supplied
@@ -231,20 +233,20 @@ for work actually completed.
 > Roles are fixed by `ProjectDetails.md` §5.2 / §57.1. Do not substitute one
 > representation for another.
 
-- [ ] **`src/embeddings.py` — TF-IDF (core).**
-  - [ ] Fit `TfidfVectorizer` on the document; expose per-candidate scores.
-  - [ ] Unit tests: known corpus → expected top terms.
-- [ ] **`src/embeddings.py` — Sentence Transformer (core).**
-  - [ ] Load `all-MiniLM-L6-v2` (small, CPU-friendly); load once and cache.
-  - [ ] `encode(texts) -> vectors` and `cosine_similarity(a, b)`.
-  - [ ] Used for: question↔context relevance, distractor↔answer similarity,
+- [x] **`src/embeddings.py` — TF-IDF (core).**
+      - [x] Fit `TfidfVectorizer` on the document; expose per-candidate scores.
+      - [x] Unit tests: known corpus → expected top terms.
+- [x] **`src/embeddings.py` — Sentence Transformer (core).**
+      - [x] Load `all-MiniLM-L6-v2` (small, CPU-friendly); load once and cache.
+      - [x] `encode(texts) -> vectors` and `cosine_similarity(a, b)`.
+      - [x] Used for: question↔context relevance, distractor↔answer similarity,
         duplicate-question detection (§46).
-  - [ ] Unit tests: identical sentences → similarity ≈ 1.0; unrelated → low.
+      - [x] Unit tests: identical sentences → similarity ≈ 1.0; unrelated → low.
 - [ ] **Word2Vec (OPTIONAL experiment only — not required for the pipeline).**
   - [ ] Train on the corpus as a word-level side experiment (§39 Exp 5) if time
         permits; report separately. Must never be a required import for the
         main pipeline to run.
-- [ ] Document the representation choices explicitly (§14).
+- [x] Document the representation choices explicitly (§14).
 
 **Deliverable:** `text → TF-IDF scores + Sentence Transformer vectors` + similarity utilities.
 
@@ -269,20 +271,20 @@ for work actually completed.
 > After M19, the local backend must load the derived checkpoint recorded in
 > `CONFIG["question_model_checkpoint"]`.
 
-- [ ] `src/question_generator.py` — `generate_question(context, answer)`.
-- [ ] **`question_model_name` fixed to `google/flan-t5-base`** (fallback
+- [x] `src/question_generator.py` — `generate_question(context, answer)`.
+- [x] **`question_model_name` fixed to `google/flan-t5-base`** (fallback
       `google/flan-t5-small` only when explicitly documented as such).
-- [ ] Keep **model loading separate** from generation (load once, cache).
-- [ ] Backend is chosen by `CONFIG["question_model_backend"]` (`"local"` | `"hf_api"`);
+- [x] Keep **model loading separate** from generation (load once, cache).
+- [x] Backend is chosen by `CONFIG["question_model_backend"]` (`"local"` | `"hf_api"`);
       both backends use the identical prompt and return identical structure.
-- [ ] Build model input: `context + answer` prompt (§16).
-- [ ] Generate multiple candidate questions; clean/trim output.
-- [ ] Return structured results **including a `generation_records` entry**
+- [x] Build model input: `context + answer` prompt (§16).
+- [x] Generate multiple candidate questions; clean/trim output.
+- [x] Return structured results **including a `generation_records` entry**
       (model name, backend, prompt, raw output, cleaned question, chunk_id) so
       every question is traceable (§49.1).
-- [ ] Do **not** add automatic backend fallback. On failure, surface a clear
+- [x] Do **not** add automatic backend fallback. On failure, surface a clear
       error plus a user-triggered "switch backend and retry" control (§16.1).
-- [ ] Unit tests with a tiny model / mocked generation (no heavy calls in CI).
+- [x] Unit tests with a tiny model / mocked generation (no heavy calls in CI).
 
 **Deliverable:** `context + answer → candidate question(s)` + traceable generation record.
 
@@ -290,10 +292,10 @@ for work actually completed.
 
 ## 10. Question Validation  *(Phase 5)*
 
-- [ ] `src/validator.py` — question checks (§19):
-  - [ ] empty output, length, duplicate, answer presence, context relevance, unsupported info.
-- [ ] Return boolean validity + detailed reasons.
-- [ ] Unit tests for each check.
+- [x] `src/validator.py` — question checks (§19):
+      - [x] empty output, length, duplicate, answer presence, context relevance, unsupported info.
+- [x] Return boolean validity + detailed reasons.
+- [x] Unit tests for each check.
 
 **Deliverable:** `question → valid/invalid + reasons`.
 
@@ -304,24 +306,24 @@ for work actually completed.
 > **Fixed pipeline (§21.1)** — implement exactly these stages, in this order.
 > WordNet is an *optional* source (§21.2), not part of the default path.
 
-- [ ] `src/distractor_generator.py` — fixed pipeline:
-  - [ ] **1. Candidate source:** textbook/corpus concepts (ranked candidates from
+- [x] `src/distractor_generator.py` — fixed pipeline:
+  - [x] **1. Candidate source:** textbook/corpus concepts (ranked candidates from
         §13 + chapter vocabulary) — this is the required pool.
-  - [ ] **2. Remove the correct answer** (case- and punctuation-insensitive).
-  - [ ] **3. Semantic embedding similarity** (Sentence Transformer, §14.2):
+  - [x] **2. Remove the correct answer** (case- and punctuation-insensitive).
+  - [x] **3. Semantic embedding similarity** (Sentence Transformer, §14.2):
         `score = 0.5·cos(cand, answer) + 0.5·cos(cand, question)`.
-  - [ ] **4. Type / domain filter** — prefer distractors of the same type/domain
+  - [x] **4. Type / domain filter** — prefer distractors of the same type/domain
         as the answer (§23 Check 5).
-  - [ ] **5. Contextual incorrectness check** — reject any candidate that is
+  - [x] **5. Contextual incorrectness check** — reject any candidate that is
         actually correct per the source context (§23 Check 4). This is a
         **critical** check; a correct distractor is a critical failure.
-  - [ ] **6. Select top 3** after de-duplication; if fewer than 3 qualify, mark
+  - [x] **6. Select top 3** after de-duplication; if fewer than 3 qualify, mark
         the MCQ invalid — never pad.
 - [ ] Optional (only if the pool is too small): WordNet fallback (§21.2),
       recorded as such.
-- [ ] Distractor validation (§23): not equal to answer, unique, plausible,
+- [x] Distractor validation (§23): not equal to answer, unique, plausible,
       contextually incorrect, type-appropriate.
-- [ ] Unit tests for selection + each validation check.
+- [x] Unit tests for selection + each validation check.
 
 **Deliverable:** `question + answer + context → 3 plausible distractors`.
 
@@ -329,17 +331,17 @@ for work actually completed.
 
 ## 12. MCQ Validation Layer  *(Phase 7)*
 
-- [ ] Assemble full MCQ: question + answer + 3 distractors + source context.
-- [ ] Final validation pipeline (§24): question → answer → distractors → source relevance.
+- [x] Assemble full MCQ: question + answer + 3 distractors + source context.
+- [x] Final validation pipeline (§24): question → answer → distractors → source relevance.
 - [ ] **Critical-failure rules (must reject the MCQ outright, never "warn"):**
-  - [ ] a distractor that is *actually correct* per the source context (§23 Check 4),
-  - [ ] the correct answer not supported by the source context (§19 Check 5),
-  - [ ] fewer than 3 valid distractors,
-  - [ ] duplicate options.
-- [ ] Regenerate or discard invalid MCQs.
-- [ ] Semantic duplicate-question filtering (§46) using **Sentence Transformer**
+-  - [x] a distractor that is *actually correct* per the source context (§23 Check 4),
+-  - [x] the correct answer not supported by the source context (§19 Check 5),
+-  - [x] fewer than 3 valid distractors,
+-  - [x] duplicate options.
+- [x] Regenerate or discard invalid MCQs.
+- [x] Semantic duplicate-question filtering (§46) using **Sentence Transformer**
       embeddings + cosine similarity (`all-MiniLM-L6-v2`, §14).
-- [ ] Unit + integration tests (including one test per critical-failure rule).
+- [x] Unit tests (including one test per critical-failure rule).
 
 **Deliverable:** `validated MCQs` + per-MCQ validation reasons.
 
@@ -347,21 +349,21 @@ for work actually completed.
 
 ## 13. Pipeline Integration  *(Phase 10 — after Phases 5–9 modules are working)*
 
-- [ ] `src/pipeline.py` — connect all modules end-to-end.
-- [ ] Enforce source-grounding / faithfulness (§25): store `source_context` + `chunk_id` per MCQ.
-- [ ] Concept coverage tracking (§44) — avoid over-generating from one concept.
-- [ ] Performance: load models once, cache, generate only requested count (§53).
-- [ ] **Return the full intermediate-result schema (§49.1)** — the Streamlit UI
+- [x] `src/pipeline.py` — connect all modules end-to-end.
+- [x] Enforce source-grounding / faithfulness (§25): store `source_context` + `chunk_id` per MCQ.
+- [x] Concept coverage tracking (§44) — avoid over-generating from one concept.
+- [x] Performance: load models once, cache, generate only requested count (§53).
+- [x] **Return the full intermediate-result schema (§49.1)** — the Streamlit UI
       (§28–§30) cannot show intermediate stages the pipeline does not return:
-  - [ ] `source`, `input_mode`, `pages`, `raw_text`, `cleaned_text`
-  - [ ] `sentences`, `chunks`
-  - [ ] `candidates`, `ranked_candidates`
-  - [ ] `generation_records` (per candidate: model input, raw output, cleaned question, backend used)
-  - [ ] `distractor_records` (per question: candidate pool + scores + selected 3)
-  - [ ] `questions` (validated MCQs), `validation` (per-MCQ checks + reasons)
-  - [ ] `stats` (counts + per-concept coverage, §43–§44)
-  - [ ] `config` (the exact `CONFIG` snapshot for reproducibility, §54)
-- [ ] Integration test: `text → final MCQs`.
+      - [x] `source`, `input_mode`, `pages`, `raw_text`, `cleaned_text`
+      - [x] `sentences`, `chunks`
+      - [x] `candidates`, `ranked_candidates`
+      - [x] `generation_records` (per candidate: model input, raw output, cleaned question, backend used)
+      - [x] `distractor_records` (per question: candidate pool + scores + selected 3)
+      - [x] `questions` (validated MCQs), `validation` (per-MCQ checks + reasons)
+      - [x] `stats` (counts + per-concept coverage, §43–§44)
+      - [x] `config` (the exact `CONFIG` snapshot for reproducibility, §54)
+- [x] Integration test: `text → final MCQs`.
 
 **Deliverable:** `generate_mcqs()` returns complete, validated, grounded MCQs **plus** all intermediate artifacts.
 

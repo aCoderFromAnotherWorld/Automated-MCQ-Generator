@@ -178,7 +178,12 @@ def main() -> None:
     with st.sidebar:
         st.header("Generation settings")
         input_mode = st.radio("Input method", ("Enter text", "Upload PDF"))
-        num_questions = st.slider("Number of questions", 1, CONFIG["max_questions"], 5)
+        num_questions = st.slider(
+            "Number of questions",
+            1,
+            CONFIG["max_questions"],
+            int(CONFIG.get("default_questions", 3)),
+        )
         model = st.selectbox("Question model", QUESTION_MODELS, index=QUESTION_MODELS.index(CONFIG["question_model"]))
         backend = st.selectbox("Execution backend", QUESTION_BACKENDS, index=QUESTION_BACKENDS.index(CONFIG["question_model_backend"]))
         st.caption(f"Semantic similarity: {CONFIG['semantic_embedding_model']}")
