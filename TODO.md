@@ -524,18 +524,30 @@ for work actually completed.
 - [x] **Critical-failure tests (§24):** a distractor that is actually correct must
       be rejected; an answer unsupported by the context must be rejected; fewer
       than 3 distractors must invalidate the MCQ; duplicate options must be rejected.
+- [x] **Answer-in-stem test (§24):** an MCQ whose answer appears in the question
+      stem is rejected as a critical failure.
+- [x] **Round-trip tests:** a predicted answer that disagrees with the intended answer
+      (`answer_not_verified`) is rejected; a matching/predictive answer is accepted;
+      the check is skipped when no prediction is supplied.
+- [x] **Distractor-filter tests:** an option repeating the question stem
+      (`appears_in_question`) or exceeding the per-run reuse cap
+      (`reused_too_often`) is rejected.
+- [x] **Entity-preservation tests:** capitalised entities ("Bay of Bengal") are kept
+      intact instead of single-word fragments; fragments exclusive to the phrase are
+      dropped, while standalone occurrences elsewhere survive.
 - [x] **Backend tests (§16.1):** the local and `hf_api` backends return the same
       structure; a missing/invalid token produces a clear error (mocked, no real calls).
 - [x] Edge cases (§66): empty, very short, very long, invalid PDF, text-less PDF, duplicate concepts, no distractors, model failure.
 
-**Deliverable:** passing test suite. *(46 tests pass.)*
+**Deliverable:** passing test suite. *(57 tests pass: 46 original + 11 added for
+correctness upgrades.)*
 
 ---
 
 ## 22. Documentation & Deliverables  *(Phase 10)*
 
 - [x] Final `README.md` with setup + usage instructions.
-- [x] `requirements.txt` finalized and pinned.
+- [x] `requirements.txt` finalized and pinned (`huggingface-hub` added for the `hf_api` backend).
 - [~] Dataset/corpus documentation (§36): source, count, domain, format, method, cleaning, pages, sentences, chunks, splits. *(training-data counts + hashes are recorded in `data/training/*.metadata.json`; evaluation-corpus docs pending)*
 - [ ] `data/evaluation/README.md` citing the fixed chapter **exactly** (author,
       title, chapter, CC BY 3.0 license, source URL, retrieval date) per §75.2.
@@ -583,7 +595,30 @@ A user can:
 - [x] **M7 — Pipeline:** end-to-end `generate_mcqs()`.
 - [ ] **M8 — Evaluation:** automatic + human evaluation.
 - [x] **M9 — UI:** Streamlit app + quiz mode.
-- [~] **M10 — Finalize:** tests, docs, report, presentation. *(tests pass; docs/report/presentation outstanding)*
+- [~] **M10 — Finalize:** tests, docs, report, presentation. *(57 tests pass; remaining docs + report + presentation outstanding)*
+
+### Implementation status (2026-09-20)
+
+The plan above the line was extended after early live testing revealed systematic
+quality and speed problems on real-world text. Implemented post-plan upgrades:
+
+- **Speed:** batched Sentence-Transformer encodings (single `encode()` call per
+  question instead of 100+ pairwise calls), `max_distractor_pool` (12),
+  `generation_attempt_factor` (3 → 5); question generation stays greedy
+  (`num_beams = 1`, one return sequence, 32 tokens). Typical run: minutes → ~7–70 s.
+- **Noise handling:** citation-marker stripping (`[a]`, `[9]`, `[note 1]`) and
+  paragraph-aware chunking — chunks align with paragraphs instead of mixing topics.
+- **Answer quality:** extractor stopwords expanded (~26 → ~130), multi-word
+  preference in ranking (`is_multi_word`), capitalised proper-noun entities kept
+  intact with `PROPER` typing ("Bay of Bengal", "Battle of Plassey"), single-word
+  fragments dropped when exclusive to the phrase.
+- **Correctness verification (critical):** round-trip QA check — the base model must
+  independently reproduce the intended answer or the MCQ is discarded
+  (`answer_not_verified`); answer-in-stem and question-stem distractors rejected;
+  distractor reuse capped per run. New critical-failure labels are recorded in
+  `mcq_validator.py`.
+- **Validator tuning:** stem-aware `unsupported_information` check, expanded
+  question stopwords (function words, irregular verbs, question-frame words).
 
 ---
 
@@ -649,9 +684,8 @@ A user can:
 
 ---
 
-*Last updated (2026-09-19): synced tracker to the implemented codebase. Marked
-M08–M13, M15, M16, M18–M20 and Phases 1–7, 9, 10 as complete (46 tests pass;
-pipeline generates validated MCQs end-to-end from the local checkpoint).
-Left M14 (evaluation), the §14 baseline system, §16 comparisons, §26 fixed
-baseline text, and the M17 documentation/release items unchecked — those remain
-genuinely outstanding.*
+*Last updated (2026-09-20): documentation pass. README.md rewritten to describe
+the working system (usage, architecture, training, settings, limitations);
+src/training/ui READMEs expanded per module; M18–M20 and the K13/Kaggle
+post-mortem already recorded; M17 README/requirements rows closed (report,
+presentation, references, limitations section, and M14 evaluation remain open).*
