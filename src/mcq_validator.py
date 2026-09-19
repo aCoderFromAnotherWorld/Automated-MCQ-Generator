@@ -106,7 +106,10 @@ def validate_mcq(
         max_words=question_max_words,
     )
     if not question_validation["valid"]:
-        reasons.extend(f"question_{reason}" for reason in question_validation["reasons"])
+        reasons.extend(
+            reason if reason.startswith("question_") else f"question_{reason}"
+            for reason in question_validation["reasons"]
+        )
     if not question_validation["checks"].get("answer_present", False):
         reasons.append("answer_not_supported_by_context")
 

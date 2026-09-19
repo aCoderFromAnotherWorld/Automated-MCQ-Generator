@@ -2,9 +2,9 @@
 
 Run with: streamlit run app.py
 
-The UI does not contain NLP logic. It renders the documented pipeline result
-and calls ``src.pipeline.generate_mcqs`` when that Phase-10 integration point
-is available.
+The UI does not contain NLP logic. It renders the pipeline result
+from ``src.pipeline.generate_mcqs`` and provides a quiz mode over the
+validated MCQs.
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ st.set_page_config(page_title="Automated MCQ Generator", page_icon="📝", layou
 
 
 def _pipeline():
-    """Return the future pipeline entry point without making the UI brittle."""
+    """Return the pipeline entry point without making the UI brittle."""
 
     try:
         from src.pipeline import generate_mcqs  # type: ignore[import-not-found]

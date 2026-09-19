@@ -1,8 +1,8 @@
 """Pre-generation public API available after M01–M07.
 
-It intentionally stops after candidate ranking.  The future M13 pipeline will
-extend the same result schema with embeddings, generated questions,
-distractors, and final validation.
+It intentionally stops after candidate ranking.  The completed M13 pipeline
+(:func:`src.pipeline.generate_mcqs`) extends the same result schema with
+embeddings, generated questions, distractors, and final validation.
 """
 
 from __future__ import annotations

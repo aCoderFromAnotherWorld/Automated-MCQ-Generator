@@ -686,6 +686,6 @@ quality and speed problems on real-world text. Implemented post-plan upgrades:
 
 *Last updated (2026-09-20): documentation pass. README.md rewritten to describe
 the working system (usage, architecture, training, settings, limitations);
-src/training/ui READMEs expanded per module; M18–M20 and the K13/Kaggle
+src/training/ui READMEs expanded per module; M18–M20 and the fp16/Kaggle
 post-mortem already recorded; M17 README/requirements rows closed (report,
 presentation, references, limitations section, and M14 evaluation remain open).*

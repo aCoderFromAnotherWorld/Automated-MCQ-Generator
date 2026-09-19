@@ -39,7 +39,8 @@ a loss-NaN guard that refuses to save a diverged run.
    the current checkpoint.
 
 Notebook lineage:
-- `train_final.ipynb` — canonical, fp32-hardened recipe that produced the deployed model.
+- `train_final.ipynb` — canonical, fp32-hardened recipe that produced the deployed model
+  (includes a pre-flight loss check that aborts before training on a NaN loss).
 - `train_kaggle_fast.ipynb` — same recipe with `PRECISION = 'auto'` (fp16 on T4 with
   a NaN guard). Prefer `train_final.ipynb`.
 - `train.ipynb` / `train_gemini.ipynb` — earlier experiments (one diverged under fp16);
