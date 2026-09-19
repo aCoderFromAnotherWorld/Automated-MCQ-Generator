@@ -51,13 +51,13 @@ handoff contract states exactly what is available now.
 | Done | ID | Implementable task | Owns | Depends on | Safe handoff contract |
 |---|---|---|---|---|---|
 | [x] | M00 | Repository scaffolding | `src/__init__.py`, config, dependencies, test layout | None | Imports work; tests can run |
-| [ ] | M01 | Pipeline result contract | schema tests and typed/documented result shape | M00 | `generate_mcqs(...)` returns all required top-level keys |
-| [ ] | M02 | Raw-text input adapter | `src/input_handler.py` | M01 | Text input becomes a validated source artifact |
-| [ ] | M03 | PDF extraction adapter | `src/pdf_processor.py` | M01 | PDF input becomes ordered page text plus metadata |
-| [ ] | M04 | Preprocessing | `src/preprocessing.py` | M02 or M03 | Raw text remains preserved; cleaned text is separate |
-| [ ] | M05 | Segmentation and chunking | `src/segmentation.py`, `src/chunking.py` | M04 | Sentences/chunks have stable IDs and source mapping |
-| [ ] | M06 | Candidate extraction | `src/keyword_extractor.py` | M05 | Returns the fixed candidate dictionary shape |
-| [ ] | M07 | Candidate ranking | `src/ranking.py` | M06 | Returns ranked candidates without changing candidate schema |
+| [x] | M01 | Pipeline result contract | schema tests and typed/documented result shape | M00 | `generate_mcqs(...)` returns all required top-level keys |
+| [x] | M02 | Raw-text input adapter | `src/input_handler.py` | M01 | Text input becomes a validated source artifact |
+| [x] | M03 | PDF extraction adapter | `src/pdf_processor.py` | M01 | PDF input becomes ordered page text plus metadata |
+| [x] | M04 | Preprocessing | `src/preprocessing.py` | M02 or M03 | Raw text remains preserved; cleaned text is separate |
+| [x] | M05 | Segmentation and chunking | `src/segmentation.py`, `src/chunking.py` | M04 | Sentences/chunks have stable IDs and source mapping |
+| [x] | M06 | Candidate extraction | `src/keyword_extractor.py` | M05 | Returns the fixed candidate dictionary shape |
+| [x] | M07 | Candidate ranking | `src/ranking.py` | M06 | Returns ranked candidates without changing candidate schema |
 | [ ] | M08 | Representations and similarity | `src/embeddings.py` | M05, M07 | TF-IDF and semantic utilities are independently testable |
 | [ ] | M09 | Question generation | `src/question_generator.py` | M05, M07, M08 | Returns traceable generation records; backend is explicit |
 | [ ] | M10 | Question validation | `src/validator.py` | M09, M08 | Returns validity plus detailed reasons |
@@ -68,8 +68,8 @@ handoff contract states exactly what is available now.
 | [x] | M15 | Streamlit integration shell | `app.py`, `ui/` | M01, M13 | UI shell consumes the result contract when available; no NLP logic in the UI |
 | [x] | M16 | Quiz mode shell | UI quiz state/tests | M15, M13 | Quiz operates on validated MCQs when the pipeline returns them |
 | [ ] | M17 | Documentation and release | README, report, reproducibility records | M13–M16 | Setup, tests, limitations, and known gaps are current |
-| [ ] | M18 | SQuADv2 preparation | `training/prepare_squad.py` | M00 | Answerable context-answer-question JSONL |
-| [ ] | M19 | Local QG fine-tuning | `training/train_qg.py` | M18 | Locally saved FLAN-T5 checkpoint and tokenizer |
+| [x] | M18 | SQuADv2 preparation | `training/prepare_squad.py` | M00 | Answerable context-answer-question JSONL |
+| [x] | M19 | Local QG fine-tuning | `training/train_qg.py` | M18 | Locally saved FLAN-T5 checkpoint and tokenizer |
 | [x] | M20 | Trained-checkpoint integration adapter | `src/question_generator.py`, config | M09, M19 | Local-checkpoint loader and traceable generation record are implemented; activation awaits M19 output |
 
 > **Current training status:** the M18/M19 code paths support the supplied
