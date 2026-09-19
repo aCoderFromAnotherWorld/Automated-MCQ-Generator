@@ -33,13 +33,21 @@ CONFIG = {
     # the source context and scores at or above this similarity to the question
     # is treated as "actually correct" and rejected.
     "context_support_threshold": 0.8,
+    # Round-trip answer verification: the base QA model must reproduce the
+    # intended answer when asked the generated question.
+    "answer_verification": True,
+    "answer_model": "google/flan-t5-small",
+    "answer_match_threshold": 0.5,
+    # Diversity: a distractor may not be reused more than this many times per run.
+    "max_distractor_reuse": 2,
     "ranking_weights": {
-        "tfidf_score": 0.35,
-        "rake_score": 0.20,
-        "frequency": 0.15,
+        "tfidf_score": 0.33,
+        "rake_score": 0.18,
+        "frequency": 0.12,
         "is_noun_phrase": 0.10,
-        "is_named_entity": 0.10,
+        "is_named_entity": 0.12,
         "position": 0.10,
+        "is_multi_word": 0.05,
     },
 }
 

@@ -70,6 +70,66 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(result["generation_records"][0]["selected_question"], "")
         self.assertEqual(result["validation"]["per_question"][0]["reasons"], ["question_empty"])
 
+    def test_pipeline_rejects_question_when_answer_verification_disagrees(self) -> None:
+        candidates = [
+            {"text": "TCP", "chunk_id": 1, "rake_score": 10.0, "is_noun_phrase": True, "is_named_entity": False, "entity_label": None},
+            {"text": "UDP", "chunk_id": 1, "rake_score": 9.0, "is_noun_phrase": True, "is_named_entity": False, "entity_label": None},
+            {"text": "IP", "chunk_id": 1, "rake_score": 8.0, "is_noun_phrase": True, "is_named_entity": False, "entity_label": None},
+            {"text": "ARP", "chunk_id": 1, "rake_score": 7.0, "is_noun_phrase": True, "is_named_entity": False, "entity_label": None},
+        ]
+
+        def similarity(left: str, right: str) -> float:
+            if "reliable delivery" in right.lower() and left.lower() in {"udp", "ip", "arp"}:
+                return 0.1
+            return 0.9
+
+        generator = _FakeGenerator()
+        generator.answer_question = lambda context, question: "UDP"  # disagrees with "TCP"
+        with patch("src.pipeline.extract_candidates", return_value=candidates), patch(
+            "src.pipeline.add_tfidf_scores", side_effect=lambda chunks, values: [dict(value, tfidf_score=1.0) for value in values]
+        ), patch("src.pipeline.rank_candidates", return_value=candidates):
+            result = generate_mcqs(
+                "TCP provides reliable delivery. UDP is connectionless. IP routes packets. ARP resolves addresses.",
+                num_questions=1,
+                config=CONFIG,
+                question_generator=generator,
+                similarity=similarity,
+            )
+        self.assertEqual(result["questions"], [])
+        self.assertIn("answer_not_verified", result["validation"]["per_question"][0]["reasons"])
+
+    def test_pipeline_accepts_question_when_answer_verification_matches(self) -> None:
+        candidates = [
+            {"text": "TCP", "chunk_id": 1, "rake_score": 10.0, "is_noun_phrase": True, "is_named_entity": False, "entity_label": None},
+            {"text": "UDP", "chunk_id": 1, "rake_score": 9.0, "is_noun_phrase": True, "is_named_entity": False, "entity_label": None},
+            {"text": "IP", "chunk_id": 1, "rake_score": 8.0, "is_noun_phrase": True, "is_named_entity": False, "entity_label": None},
+            {"text": "ARP", "chunk_id": 1, "rake_score": 7.0, "is_noun_phrase": True, "is_named_entity": False, "entity_label": None},
+        ]
+
+        def similarity(left: str, right: str) -> float:
+            if "reliable delivery" in right.lower() and left.lower() in {"udp", "ip", "arp"}:
+                return 0.1
+            return 0.9
+
+        generator = _FakeGenerator()
+        generator.answer_question = lambda context, question: "TCP provides reliable delivery"
+        with patch("src.pipeline.extract_candidates", return_value=candidates), patch(
+            "src.pipeline.add_tfidf_scores", side_effect=lambda chunks, values: [dict(value, tfidf_score=1.0) for value in values]
+        ), patch("src.pipeline.rank_candidates", return_value=candidates):
+            result = generate_mcqs(
+                "TCP provides reliable delivery. UDP is connectionless. IP routes packets. ARP resolves addresses.",
+                num_questions=1,
+                config=CONFIG,
+                question_generator=generator,
+                similarity=similarity,
+            )
+        self.assertEqual(len(result["questions"]), 1)
+        self.assertEqual(
+            result["validation"]["per_question"][0]["checks"]["answer_verified"],
+            True,
+        )
+        self.assertIn("verified_answer", result["questions"][0])
+
 
 if __name__ == "__main__":
     unittest.main()

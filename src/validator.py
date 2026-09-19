@@ -6,13 +6,11 @@ import re
 from typing import Any, Callable, Iterable
 
 from src.embeddings import semantic_similarity
+from src.keyword_extractor import STOPWORDS as _LEXICAL_STOPWORDS
 
 
 def _normalise(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
-
-
-_SUFFIXES = ("ies", "ing", "ed", "es", "s")
 
 
 def _stem(word: str) -> str:
@@ -22,10 +20,16 @@ def _stem(word: str) -> str:
     and unrelated words are never collapsed into false matches.
     """
 
-    for suffix in _SUFFIXES:
-        if word.endswith(suffix) and len(word) - len(suffix) >= 4:
-            base = word[: -len(suffix)]
-            return base + "y" if suffix == "ies" else base
+    if word.endswith("ies") and len(word) - 3 >= 4:
+        return word[:-3] + "y"
+    if word.endswith("ing") and len(word) - 3 >= 4:
+        return word[:-3]
+    if word.endswith("ed") and len(word) - 2 >= 4:
+        return word[:-2]
+    if word.endswith(("ses", "xes", "zes", "ches", "shes")) and len(word) - 2 >= 4:
+        return word[:-2]
+    if word.endswith("s") and len(word) - 1 >= 4:
+        return word[:-1]
     return word
 
 
@@ -129,9 +133,17 @@ def _lexical_relevance(question: str, context: str) -> float:
 
 
 _QUESTION_STOPWORDS = {
-    "a", "an", "and", "are", "be", "does", "do", "how", "is", "of", "the",
-    "protocol", "to", "what", "when", "where", "which", "who", "why",
-}
+    "a", "an", "and", "are", "be", "does", "do", "did", "how", "is", "of", "the",
+    "protocol", "to", "what", "when", "where", "which", "who", "whom", "whose", "why",
+    # Generic question-frame words that carry no verifiable content.
+    "name", "type", "kind", "form", "purpose", "role", "called", "known", "main",
+    "becomes", "become", "became",
+    # Common irregular verbs (the light stemmer cannot normalise these).
+    "come", "came", "go", "went", "give", "gave", "take", "took", "make", "made",
+    "get", "got", "say", "said", "see", "saw", "know", "knew", "lead", "led",
+    "fight", "fought", "begin", "began", "bring", "brought", "hold", "held",
+    "win", "won", "rise", "rose", "run", "ran", "write", "wrote", "speak", "spoke",
+} | set(_LEXICAL_STOPWORDS)
 
 
 # Explicit alias for callers that use the module's task terminology.

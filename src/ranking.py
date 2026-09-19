@@ -53,15 +53,16 @@ def rank_candidates(candidates: Iterable[Mapping[str, Any]], chunks: Iterable[Ma
         record["frequency"] = len(pattern.findall(chunk_text))
         first_index = chunk_text.find(normalize_candidate(str(record["text"])))
         record["position"] = 1.0 / (1 + first_index) if first_index >= 0 else 0.0
+        record["is_multi_word"] = 1.0 if len(normalize_candidate(str(record["text"])).split()) > 1 else 0.0
         record.setdefault("tfidf_score", 0.0)  # populated by M08 without changing this contract
 
-    feature_names = ("tfidf_score", "rake_score", "frequency", "is_noun_phrase", "is_named_entity", "position")
+    feature_names = ("tfidf_score", "rake_score", "frequency", "is_noun_phrase", "is_named_entity", "position", "is_multi_word")
     normalised = {
         name: _normalise([float(record[name]) for record in records])
         for name in feature_names
     }
     weights = dict(config.get("ranking_weights", {}))
-    defaults = {"tfidf_score": 0.35, "rake_score": 0.20, "frequency": 0.15, "is_noun_phrase": 0.10, "is_named_entity": 0.10, "position": 0.10}
+    defaults = {"tfidf_score": 0.33, "rake_score": 0.18, "frequency": 0.12, "is_noun_phrase": 0.10, "is_named_entity": 0.12, "position": 0.10, "is_multi_word": 0.05}
     defaults.update(weights)
     for index, record in enumerate(records):
         record["final_score"] = round(sum(defaults[name] * normalised[name][index] for name in feature_names), 6)

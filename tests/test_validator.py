@@ -85,6 +85,17 @@ class ValidatorTests(unittest.TestCase):
         self.assertIn("unsupported_information", result["reasons"])
         self.assertIn("encrypts", result["unsupported_words"])
 
+    def test_function_and_paraphrase_words_are_not_treated_as_unsupported(self) -> None:
+        # "did" is a question-frame word; "provide" is a stem match for "provides".
+        result = validate_question(
+            "What did that provide for reliable delivery?",
+            self.answer,
+            self.context,
+            similarity=lambda left, right: 0.9,
+        )
+        self.assertEqual(result["unsupported_words"], [])
+        self.assertTrue(result["checks"]["supported_information"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -74,6 +74,47 @@ def rake_phrases(text: str, *, min_chars: int = 3, max_words: int = 6) -> dict[s
     return phrases
 
 
+_PROPER_TOKEN = r"[A-Z][a-zA-Z'\-]+"
+_PROPER_CONNECTORS = r"(?:of|the|and|de|da|bin|ul|al|van)"
+_PROPER_RE = re.compile(rf"\b{_PROPER_TOKEN}(?:\s+{_PROPER_CONNECTORS}\s+|\s+){_PROPER_TOKEN}(?:(?:\s+{_PROPER_CONNECTORS}\s+|\s+){_PROPER_TOKEN})?\b")
+
+
+def _proper_phrases(text: str) -> list[tuple[str, int, int]]:
+    """Return capitalised multi-word phrases as ``(phrase, start, end)`` spans.
+
+    These are proper nouns such as "Bay of Bengal" or "Battle of Plassey" that
+    RAKE fragments at stopwords. A sentence-initial capitalised word is treated as
+    ordinary capitalisation and dropped before a phrase is accepted.
+    """
+
+    phrases: list[tuple[str, int, int]] = []
+    for match in _PROPER_RE.finditer(text):
+        phrase = match.group(0).strip()
+        start, end = match.span()
+        before = text[:start].rstrip()
+        if not before or before[-1] in ".!?":
+            tokens = phrase.split()
+            if len(tokens) <= 2:
+                continue
+            # Drop the sentence-initial capitalised token (e.g. "The Battle of Plassey").
+            offset = len(tokens[0]) + 1
+            phrase = phrase[offset:].strip()
+            start += offset
+        if not phrase or phrase.lower().split()[0] in STOPWORDS:
+            continue
+        phrases.append((phrase, start, start + len(phrase)))
+    return phrases
+
+
+def _is_fragment(word: str, text: str, spans: list[tuple[int, int]]) -> bool:
+    """True when every standalone occurrence of ``word`` sits inside a phrase span."""
+
+    occurrences = [match.start() for match in re.finditer(rf"\b{re.escape(word)}\b", text, re.IGNORECASE)]
+    if not occurrences:
+        return False
+    return all(any(start <= position < end for start, end in spans) for position in occurrences)
+
+
 def _spacy_candidates(text: str, nlp: Any) -> list[dict[str, Any]]:
     doc = nlp(text)
     records: list[dict[str, Any]] = []
@@ -110,6 +151,8 @@ def extract_candidates(chunks: Iterable[Mapping[str, Any]], config: Mapping[str,
     merged: dict[tuple[int | None, str], dict[str, Any]] = {}
     for chunk in chunks:
         chunk_id = chunk.get("chunk_id")
+        chunk_text = str(chunk.get("text", ""))
+        rake_scores = rake_phrases(chunk_text, min_chars=min_chars, max_words=max_words)
         records = [
             {
                 "text": phrase,
@@ -119,10 +162,37 @@ def extract_candidates(chunks: Iterable[Mapping[str, Any]], config: Mapping[str,
                 "is_named_entity": False,
                 "entity_label": None,
             }
-            for phrase, score in rake_phrases(str(chunk.get("text", "")), min_chars=min_chars, max_words=max_words).items()
+            for phrase, score in rake_scores.items()
+        ]
+        # Keep capitalised multi-word entities intact instead of using fragments.
+        phrases = _proper_phrases(chunk_text)
+        spans = [(start, end) for _, start, end in phrases]
+        for phrase, _start, _end in phrases:
+            if not _valid_phrase(phrase, min_chars=min_chars, max_words=max_words):
+                continue
+            parts = normalize_candidate(phrase).split()
+            score = max((float(rake_scores.get(part, 0.0)) for part in parts), default=0.0)
+            records.append(
+                {
+                    "text": phrase,
+                    "source": "proper_phrase",
+                    "rake_score": score + 1.0 + len(parts),
+                    "is_noun_phrase": True,
+                    "is_named_entity": True,
+                    "entity_label": "PROPER",
+                }
+            )
+        records = [
+            record
+            for record in records
+            if not (
+                record["source"] == "rake"
+                and len(normalize_candidate(record["text"]).split()) == 1
+                and _is_fragment(normalize_candidate(record["text"]).split()[0], chunk_text, spans)
+            )
         ]
         if nlp is not None:
-            records.extend(_spacy_candidates(str(chunk.get("text", "")), nlp))
+            records.extend(_spacy_candidates(chunk_text, nlp))
         for record in records:
             if not _valid_phrase(record["text"], min_chars=min_chars, max_words=max_words):
                 continue

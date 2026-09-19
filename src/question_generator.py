@@ -26,6 +26,7 @@ class LocalGeneratorSettings:
     max_new_tokens: int = 64
     num_beams: int = 4
     num_return_sequences: int = 3
+    answer_model: str = "google/flan-t5-small"
 
 
 @dataclass(frozen=True)
@@ -112,12 +113,68 @@ def _load_checkpoint(checkpoint_text: str) -> tuple[Any, Any, Any]:
     return tokenizer, model, device
 
 
+@lru_cache(maxsize=2)
+def _load_answer_model(model_name: str) -> tuple[Any, Any, Any]:
+    """Load and cache the base QA model used for round-trip answer verification.
+
+    The fine-tuned checkpoint is question-generation-only and answers a QA prompt
+    by echoing the question, so verification uses the base instruction-tuned model.
+    """
+
+    try:
+        import torch
+        from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+    except ModuleNotFoundError as error:
+        raise QuestionGenerationError(
+            "Answer verification requires torch and transformers. Install requirements.txt."
+        ) from error
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model = AutoModelForSeq2SeqLM.from_pretrained(model_name)
+    except Exception as error:
+        raise QuestionGenerationError(f"Could not load answer model '{model_name}'.") from error
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+    model.eval()
+    return tokenizer, model, device
+
+
+def answer_question(
+    context: str,
+    question: str,
+    *,
+    model_name: str = "google/flan-t5-small",
+    max_new_tokens: int = 24,
+) -> str:
+    """Return the model's answer to ``question`` given ``context``.
+
+    Used as a round-trip check: a question is only trustworthy when the answer it
+    provokes matches the answer candidate it was generated from.
+    """
+
+    cleaned_context = " ".join(str(context).split())
+    cleaned_question = " ".join(str(question).split())
+    if not cleaned_context or not cleaned_question:
+        return ""
+    tokenizer, model, device = _load_answer_model(model_name)
+    prompt = f"question: {cleaned_question} context: {cleaned_context}"
+    try:
+        import torch
+
+        encoded = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=512)
+        encoded = {name: value.to(device) for name, value in encoded.items()}
+        with torch.no_grad():
+            generated = model.generate(**encoded, max_new_tokens=max_new_tokens, num_beams=1)
+        return _clean_question(tokenizer.batch_decode(generated, skip_special_tokens=True)[0])
+    except Exception as error:
+        raise QuestionGenerationError(f"Answer verification failed: {error}") from error
+
+
 class LocalQuestionGenerator:
     """Generate questions using the locally trained checkpoint only."""
 
     def __init__(self, settings: LocalGeneratorSettings) -> None:
         self.settings = settings
-
     @classmethod
     def from_config(cls, config: Mapping[str, Any]) -> "LocalQuestionGenerator":
         if config.get("question_model_backend", "local") != "local":
@@ -135,8 +192,14 @@ class LocalQuestionGenerator:
                 max_new_tokens=int(config.get("generation_max_new_tokens", 64)),
                 num_beams=int(config.get("generation_num_beams", 4)),
                 num_return_sequences=max(1, int(config.get("generation_num_return_sequences", 3))),
+                answer_model=str(config.get("answer_model", "google/flan-t5-small")),
             )
         )
+
+    def answer_question(self, context: str, question: str) -> str:
+        """Round-trip check support: answer ``question`` from ``context``."""
+
+        return answer_question(context, question, model_name=self.settings.answer_model)
 
     def generate_question(self, context: str, answer: str, *, chunk_id: int | None = None) -> dict[str, Any]:
         """Generate one cleaned question and return an auditable record."""

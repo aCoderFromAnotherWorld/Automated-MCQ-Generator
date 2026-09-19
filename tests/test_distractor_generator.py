@@ -93,6 +93,31 @@ class DistractorGeneratorTests(unittest.TestCase):
         self.assertFalse(result["valid"])
         self.assertIn("fewer_than_three_valid_distractors", result["reasons"])
 
+    def test_option_repeating_the_question_stem_is_rejected(self) -> None:
+        result = generate_distractors(
+            "What is the capital of Bangladesh?",
+            "Dhaka",
+            "Dhaka is the capital of Bangladesh. Chittagong is the second city. Sylhet is in the north. Khulna is in the south.",
+            ["Bangladesh", "Chittagong", "Sylhet", "Khulna"],
+            similarity=lambda left, right: 0.5,
+        )
+        rejected = {item["text"].lower(): item["reasons"] for item in result["rejected"]}
+        self.assertIn("appears_in_question", rejected["bangladesh"])
+        self.assertNotIn("bangladesh", [item.lower() for item in result["selected"]])
+
+    def test_repeatedly_reused_option_is_rejected(self) -> None:
+        result = generate_distractors(
+            "Which protocol is reliable?",
+            "TCP",
+            "TCP is reliable. UDP is connectionless. IP routes packets. ARP maps addresses.",
+            ["UDP", "IP", "ARP"],
+            similarity=lambda left, right: 0.5,
+            avoid_counts={"udp": 2},
+            max_reuse=2,
+        )
+        rejected = {item["text"].lower(): item["reasons"] for item in result["rejected"]}
+        self.assertIn("reused_too_often", rejected["udp"])
+
 
 if __name__ == "__main__":
     unittest.main()

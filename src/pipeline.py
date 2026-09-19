@@ -62,13 +62,14 @@ def generate_mcqs(
     config: Mapping[str, Any] | None = None,
     question_generator: Any | None = None,
     similarity: Callable[[str, str], float] | None = None,
+    answer_verifier: Callable[[str, str], str] | None = None,
     **options: Any,
 ) -> dict[str, Any]:
     """Run the completed M00-M12 pipeline and return the full result contract.
 
-    ``question_generator`` and ``similarity`` are injectable seams for tests and
-    controlled experiments. Production calls use the configured local trained
-    checkpoint and cached Sentence Transformer utilities.
+    ``question_generator``, ``similarity``, and ``answer_verifier`` are injectable
+    seams for tests and controlled experiments. Production calls use the
+    configured local trained checkpoint and cached Sentence Transformer utilities.
     """
 
     if num_questions < 1:
@@ -80,6 +81,10 @@ def generate_mcqs(
     similarity_fn = similarity
     max_attempts = num_questions * int(run_config.get("generation_attempt_factor", 3))
     distractor_pool_size = int(run_config.get("max_distractor_pool", 12))
+    max_distractor_reuse = int(run_config.get("max_distractor_reuse", 2))
+    answer_match_threshold = float(run_config.get("answer_match_threshold", 0.5))
+    verify_answers = bool(run_config.get("answer_verification", True))
+    distractor_usage: dict[str, int] = {}
     result = text_to_result(text, run_config)
     result = preprocess_result(result)
     result = chunk_result(result, run_config)
@@ -95,6 +100,7 @@ def generate_mcqs(
     )
 
     generator = question_generator or generator_from_config(run_config)
+    verifier = answer_verifier or getattr(generator, "answer_question", None)
     generation_records: list[dict[str, Any]] = []
     distractor_records: list[dict[str, Any]] = []
     validation_records: list[dict[str, Any]] = []
@@ -129,8 +135,18 @@ def generate_mcqs(
             answer_record=candidate,
             similarity=similarity_fn,
             context_support_threshold=float(run_config.get("context_support_threshold", 0.8)),
+            avoid_counts=distractor_usage,
+            max_reuse=max_distractor_reuse,
         )
         distractor_records.append(distractors)
+
+        predicted_answer: str | None = None
+        if verify_answers and verifier is not None:
+            try:
+                predicted_answer = str(verifier(context, question) or "").strip() or None
+            except Exception:
+                predicted_answer = None
+
         assembled = assemble_mcq(
             question,
             answer,
@@ -142,6 +158,8 @@ def generate_mcqs(
             previous_questions=accepted_questions,
             similarity=similarity_fn,
             duplicate_threshold=float(run_config.get("duplicate_question_threshold", 0.85)),
+            predicted_answer=predicted_answer,
+            answer_match_threshold=answer_match_threshold,
         )
         validation = dict(assembled["validation"])
         validation["candidate"] = dict(candidate)
@@ -154,8 +172,12 @@ def generate_mcqs(
         mcq = dict(assembled["mcq"])
         mcq["backend"] = generation.get("backend")
         mcq["model_name"] = generation.get("model_name")
+        mcq["verified_answer"] = predicted_answer
         questions.append(mcq)
         accepted_questions.append(question)
+        for distractor in distractors.get("selected", []):
+            key = " ".join(str(distractor).lower().split())
+            distractor_usage[key] = distractor_usage.get(key, 0) + 1
 
     result["generation_records"] = generation_records
     result["distractor_records"] = distractor_records

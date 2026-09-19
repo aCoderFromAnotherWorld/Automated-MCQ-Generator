@@ -103,6 +103,56 @@ class McqValidatorTests(unittest.TestCase):
         self.assertFalse(result["valid"])
         self.assertIn("duplicate_question", result["validation"]["reasons"])
 
+    def test_answer_appearing_in_the_question_is_rejected(self) -> None:
+        result = assemble_mcq(
+            "Which protocol TCP provides reliable delivery?",
+            self.answer,
+            self.context,
+            self.distractors,
+            similarity=lambda left, right: 0.9,
+        )
+        self.assertFalse(result["valid"])
+        self.assertIn("answer_appears_in_question", result["validation"]["critical_failures"])
+        self.assertFalse(result["validation"]["checks"]["answer_not_in_question"])
+        self.assertIsNone(result["mcq"])
+
+    def test_round_trip_answer_mismatch_is_rejected(self) -> None:
+        result = assemble_mcq(
+            self.question,
+            self.answer,
+            self.context,
+            self.distractors,
+            similarity=lambda left, right: 0.9,
+            predicted_answer="UDP",
+        )
+        self.assertFalse(result["valid"])
+        self.assertIn("answer_not_verified", result["validation"]["critical_failures"])
+        self.assertFalse(result["validation"]["checks"]["answer_verified"])
+        self.assertEqual(result["validation"]["predicted_answer"], "UDP")
+
+    def test_round_trip_answer_match_is_accepted(self) -> None:
+        result = assemble_mcq(
+            self.question,
+            self.answer,
+            self.context,
+            self.distractors,
+            similarity=lambda left, right: 0.9,
+            predicted_answer="TCP, which provides reliable delivery",
+        )
+        self.assertTrue(result["valid"])
+        self.assertTrue(result["validation"]["checks"]["answer_verified"])
+
+    def test_round_trip_check_is_skipped_without_a_prediction(self) -> None:
+        result = assemble_mcq(
+            self.question,
+            self.answer,
+            self.context,
+            self.distractors,
+            similarity=lambda left, right: 0.9,
+        )
+        self.assertTrue(result["valid"])
+        self.assertIsNone(result["validation"]["checks"]["answer_verified"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -30,3 +30,25 @@ class CandidateAndRankingTests(unittest.TestCase):
         self.assertIn("User Datagram Protocol", labels)
         self.assertNotIn("Control Protocol", labels)
         self.assertTrue(all("final_score" in candidate for candidate in ranked))
+
+    def test_capitalised_entity_is_kept_intact_instead_of_fragments(self) -> None:
+        candidates = extract_candidates(
+            [{"chunk_id": 1, "text": "It has a coastline along the Bay of Bengal to its south."}],
+            CONFIG,
+        )
+        labels = [candidate["text"].lower() for candidate in candidates]
+        self.assertIn("bay of bengal", labels)
+        # Fragments that only occur inside the entity phrase are dropped.
+        self.assertNotIn("bay", labels)
+        phrase = next(candidate for candidate in candidates if candidate["text"].lower() == "bay of bengal")
+        self.assertTrue(phrase["is_named_entity"])
+        self.assertEqual(phrase["entity_label"], "PROPER")
+
+    def test_standalone_word_survives_when_it_also_occurs_outside_a_phrase(self) -> None:
+        candidates = extract_candidates(
+            [{"chunk_id": 1, "text": "Bengal became a commercial centre. The Bay of Bengal is to the south."}],
+            CONFIG,
+        )
+        labels = [candidate["text"].lower() for candidate in candidates]
+        self.assertIn("bay of bengal", labels)
+        self.assertIn("bengal", labels)

@@ -37,6 +37,8 @@ def generate_distractors(
     similarity: Callable[[str, str], float] | None = None,
     context_similarity: Callable[[str, str], float] | None = None,
     context_support_threshold: float = 0.75,
+    avoid_counts: Mapping[str, int] | None = None,
+    max_reuse: int = 2,
     limit: int = 3,
 ) -> dict[str, Any]:
     """Select up to three plausible, source-grounded incorrect concepts.
@@ -49,6 +51,7 @@ def generate_distractors(
     scored: list[dict[str, Any]] = []
     seen: set[str] = set()
     answer_key = _normalise(answer)
+    question_words = set(_normalise(question).split())
 
     def score(left: str, right: str) -> float:
         if similarity is not None:
@@ -70,10 +73,16 @@ def generate_distractors(
         text = " ".join(_candidate_text(candidate).split())
         key = _normalise(text)
         reasons: list[str] = []
+        key = _normalise(text)
         if not key or key == answer_key:
             reasons.append("equals_answer")
         elif key in seen:
             reasons.append("duplicate_candidate")
+        elif key.split() and set(key.split()) <= question_words:
+            # An option that merely repeats the question stem is trivially eliminable.
+            reasons.append("appears_in_question")
+        elif avoid_counts is not None and int(avoid_counts.get(key, 0)) >= max_reuse:
+            reasons.append("reused_too_often")
         seen.add(key)
         needs_support = (not reasons) and (key in normalized_context)
         if reasons:

@@ -44,6 +44,29 @@ def _semantic_duplicate(
     return False, None
 
 
+def _token_overlap(left: str, right: str) -> float:
+    """Token F1 between two answer strings (used by round-trip verification)."""
+
+    left_tokens = set(_normalise(left).split())
+    right_tokens = set(_normalise(right).split())
+    if not left_tokens or not right_tokens:
+        return 0.0
+    shared = len(left_tokens & right_tokens)
+    return 2 * shared / (len(left_tokens) + len(right_tokens))
+
+
+def _answer_matches(intended: str, predicted: str, threshold: float) -> bool:
+    """True when a predicted answer reproduces the intended answer."""
+
+    intended_tokens = set(_normalise(intended).split())
+    predicted_tokens = set(_normalise(predicted).split())
+    if not intended_tokens or not predicted_tokens:
+        return False
+    if intended_tokens <= predicted_tokens or predicted_tokens <= intended_tokens:
+        return True
+    return _token_overlap(intended, predicted) >= threshold
+
+
 def validate_mcq(
     question: str,
     answer: str,
@@ -58,6 +81,8 @@ def validate_mcq(
     duplicate_threshold: float = 0.85,
     question_min_words: int = 3,
     question_max_words: int = 40,
+    predicted_answer: str | None = None,
+    answer_match_threshold: float = 0.5,
 ) -> dict[str, Any]:
     """Validate one generated MCQ and return a final JSON-safe record.
 
@@ -96,6 +121,20 @@ def validate_mcq(
     if duplicate_options:
         reasons.append("duplicate_options")
 
+    # A question whose stem already contains the answer is a giveaway.
+    answer_tokens = set(_normalise(answer_text).split())
+    question_tokens = set(_normalise(question_text).split())
+    answer_in_question = bool(answer_tokens) and answer_tokens <= question_tokens
+    if answer_in_question:
+        reasons.append("answer_appears_in_question")
+
+    # Round-trip verification: asking the question back must reproduce the answer.
+    answer_verified: bool | None = None
+    if predicted_answer is not None:
+        answer_verified = _answer_matches(answer_text, str(predicted_answer), answer_match_threshold)
+        if not answer_verified:
+            reasons.append("answer_not_verified")
+
     enough_distractors = len(distractors) == 3 and bool(distractor_record.get("valid", True))
     if not enough_distractors:
         reasons.append("fewer_than_three_valid_distractors")
@@ -116,6 +155,8 @@ def validate_mcq(
         "unique_options": not duplicate_options,
         "three_valid_distractors": enough_distractors,
         "distractors_contextually_incorrect": not bool(critical_rejections),
+        "answer_not_in_question": not answer_in_question,
+        "answer_verified": answer_verified,
     }
     validation = {
         "valid": not reasons,
@@ -123,6 +164,7 @@ def validate_mcq(
         "checks": checks,
         "question": question_validation,
         "duplicate_score": duplicate_score,
+        "predicted_answer": predicted_answer,
         "critical_failures": [
             reason
             for reason in reasons
@@ -132,6 +174,8 @@ def validate_mcq(
                 "fewer_than_three_valid_distractors",
                 "contextually_supported_distractor",
                 "duplicate_options",
+                "answer_appears_in_question",
+                "answer_not_verified",
             }
         ],
     }
