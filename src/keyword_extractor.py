@@ -10,6 +10,19 @@ from typing import Any, Iterable, Mapping
 STOPWORDS = {
     "a", "an", "and", "are", "as", "at", "be", "by", "for", "from", "in", "is", "it", "of",
     "on", "or", "that", "the", "this", "to", "was", "were", "with", "which", "who", "will",
+    # Auxiliary/modal verbs and pronouns that are never good answer candidates.
+    "am", "been", "being", "can", "could", "did", "do", "does", "doing", "done", "had", "has",
+    "have", "having", "he", "her", "hers", "him", "his", "i", "me", "might", "must", "my",
+    "our", "ours", "she", "should", "their", "theirs", "them", "they", "us", "we", "would",
+    "you", "your", "yours", "shall",
+    # Generic connectors/quantifiers/adverbs that pollute answer and distractor pools.
+    "about", "above", "after", "again", "against", "all", "also", "among", "another", "any",
+    "because", "before", "below", "between", "both", "down", "during", "each", "even", "ever",
+    "few", "further", "hence", "here", "however", "if", "into", "many", "more", "most", "much",
+    "never", "no", "nor", "not", "now", "off", "once", "only", "other", "others", "out", "over",
+    "own", "same", "since", "so", "some", "such", "than", "then", "there", "therefore", "these",
+    "those", "though", "thus", "too", "under", "until", "up", "upon", "very", "when", "where",
+    "while", "why", "how",
 }
 _WORD = re.compile(r"[A-Za-z][A-Za-z0-9'-]*")
 
@@ -21,7 +34,13 @@ def normalize_candidate(text: str) -> str:
 def _valid_phrase(text: str, *, min_chars: int, max_words: int) -> bool:
     normalized = normalize_candidate(text)
     words = normalized.split()
-    return bool(normalized) and len(normalized) >= min_chars and len(words) <= max_words and not all(word in STOPWORDS for word in words)
+    return (
+        bool(normalized)
+        and any(character.isalpha() for character in normalized)
+        and len(normalized) >= min_chars
+        and len(words) <= max_words
+        and not all(word in STOPWORDS for word in words)
+    )
 
 
 def rake_phrases(text: str, *, min_chars: int = 3, max_words: int = 6) -> dict[str, float]:
