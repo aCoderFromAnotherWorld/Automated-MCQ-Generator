@@ -15,11 +15,12 @@ env/
 # Jupyter
 .ipynb_checkpoints/
 
-# Generated outputs
-outputs/
+# # Generated outputs
+# outputs/
 
-# Model files
-models/
+# # Model files
+# models/
+**/optimizer.pt
 
 # OS
 .DS_Store
