@@ -128,6 +128,7 @@ def generate_mcqs(
             result["ranked_candidates"][:distractor_pool_size],
             answer_record=candidate,
             similarity=similarity_fn,
+            context_support_threshold=float(run_config.get("context_support_threshold", 0.8)),
         )
         distractor_records.append(distractors)
         assembled = assemble_mcq(

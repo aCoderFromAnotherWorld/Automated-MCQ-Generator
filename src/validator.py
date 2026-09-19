@@ -12,6 +12,23 @@ def _normalise(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
 
 
+_SUFFIXES = ("ies", "ing", "ed", "es", "s")
+
+
+def _stem(word: str) -> str:
+    """Light suffix stemmer so 'provides'/'provide' and 'prevents'/'prevent' match.
+
+    Only strips a suffix when at least four characters remain, so short words
+    and unrelated words are never collapsed into false matches.
+    """
+
+    for suffix in _SUFFIXES:
+        if word.endswith(suffix) and len(word) - len(suffix) >= 4:
+            base = word[: -len(suffix)]
+            return base + "y" if suffix == "ies" else base
+    return word
+
+
 def validate_question(
     question: str,
     answer: str,
@@ -84,7 +101,11 @@ def validate_question(
     question_content = set(re.findall(r"[a-z0-9]+", question_text.lower())) - _QUESTION_STOPWORDS
     context_words = set(re.findall(r"[a-z0-9]+", context_text.lower()))
     answer_words = set(re.findall(r"[a-z0-9]+", answer_text.lower()))
-    unsupported_words = sorted(question_content - context_words - answer_words)
+    # Compare on light stems so morphological variants (provides/provide,
+    # prevents/prevent, processes/process) count as supported information.
+    context_stems = {_stem(word) for word in context_words}
+    answer_stems = {_stem(word) for word in answer_words}
+    unsupported_words = sorted(word for word in question_content if _stem(word) not in context_stems and _stem(word) not in answer_stems)
     checks["supported_information"] = not unsupported_words
     if unsupported_words:
         reasons.append("unsupported_information")

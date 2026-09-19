@@ -28,7 +28,11 @@ CONFIG = {
     # Performance caps: bound the per-question distractor pool and the number of
     # generation attempts so a single run stays fast on CPU.
     "max_distractor_pool": 12,
-    "generation_attempt_factor": 3,
+    "generation_attempt_factor": 5,
+    # Distractor contextual-incorrectness threshold: a candidate that appears in
+    # the source context and scores at or above this similarity to the question
+    # is treated as "actually correct" and rejected.
+    "context_support_threshold": 0.8,
     "ranking_weights": {
         "tfidf_score": 0.35,
         "rake_score": 0.20,
